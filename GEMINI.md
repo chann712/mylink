@@ -48,6 +48,7 @@ Next.js 16.2.1 in this project contains breaking changes compared to previous ve
 - **TypeScript:** Strict mode is enabled. Do not bypass the type system.
 - **ESLint:** The project uses Flat Config (`eslint.config.mjs`).
 - **Tests:** No testing framework (like Jest or Vitest) is explicitly configured yet. Any new features should include a plan for verification.
+- **Git workflow:** When requested to commit, ONLY perform `git commit`. Do NOT automatically run `git pull` or `git push` unless explicitly asked.
 
 ## Future Plans (TODO)
 - [ ] Consolidate root `README.md` and `my-profile/README.md`.

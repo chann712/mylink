@@ -24,16 +24,54 @@ export default function Page() {
   // Form State
   const [newTitle, setNewTitle] = useState("");
   const [newUrl, setNewUrl] = useState("");
+  const [titleError, setTitleError] = useState("");
+  const [urlError, setUrlError] = useState("");
+
+  const handleOpenChange = (open: boolean) => {
+    setIsDialogOpen(open);
+    if (!open) {
+      setNewTitle("");
+      setNewUrl("");
+      setTitleError("");
+      setUrlError("");
+    }
+  };
 
   const handleAddLink = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTitle.trim() || !newUrl.trim()) return;
+    setTitleError("");
+    setUrlError("");
 
-    // PRD: URL 입력 시 도메인을 추출하여 구글 Favicon API 자동 연동
-    let formattedUrl = newUrl.trim();
-    if (!formattedUrl.startsWith("http://") && !formattedUrl.startsWith("https://")) {
-      formattedUrl = "https://" + formattedUrl;
+    let isValid = true;
+    if (!newTitle.trim()) {
+      setTitleError("제목을 입력해주세요.");
+      isValid = false;
+    } else if (newTitle.trim().length > 50) {
+      setTitleError("제목은 50자를 초과할 수 없습니다.");
+      isValid = false;
     }
+
+    let formattedUrl = newUrl.trim();
+    if (!formattedUrl.trim()) {
+      setUrlError("URL을 입력해주세요.");
+      isValid = false;
+    } else {
+      if (!formattedUrl.startsWith("http://") && !formattedUrl.startsWith("https://")) {
+        formattedUrl = "https://" + formattedUrl;
+      }
+      try {
+        const urlObj = new URL(formattedUrl);
+        if (!urlObj.hostname.includes(".")) {
+          setUrlError("올바른 도메인 주소(예: example.com)를 입력해주세요.");
+          isValid = false;
+        }
+      } catch (err) {
+        setUrlError("올바른 URL 형식이 아닙니다.");
+        isValid = false;
+      }
+    }
+
+    if (!isValid) return;
 
     let domain = "";
     try {
@@ -57,9 +95,7 @@ export default function Page() {
     setLinks((prev) => [...prev, newLinkItem]);
     
     // Reset and close
-    setNewTitle("");
-    setNewUrl("");
-    setIsDialogOpen(false);
+    handleOpenChange(false);
   };
 
   return (
@@ -141,7 +177,7 @@ export default function Page() {
           ))}
 
           {/* Add Link Dialog */}
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
               <button className="mt-4 w-full flex items-center justify-center gap-2 py-4 rounded-2xl border border-dashed border-white/20 text-zinc-400 hover:text-white hover:bg-white/5 hover:border-white/40 transition-all duration-300 outline-none focus-visible:ring-2 ring-purple-500 ring-offset-2 ring-offset-[#0c0a09]">
                 <IconPlus className="w-5 h-5" />
@@ -165,9 +201,13 @@ export default function Page() {
                       id="title"
                       placeholder="예: 내 블로그, Instagram"
                       value={newTitle}
-                      onChange={(e) => setNewTitle(e.target.value)}
-                      className="bg-black/50 border-white/10 text-white focus-visible:ring-purple-500 rounded-lg h-11"
+                      onChange={(e) => {
+                        setNewTitle(e.target.value);
+                        if (titleError) setTitleError("");
+                      }}
+                      className={`h-11 rounded-lg bg-black/50 text-white focus-visible:ring-purple-500 ${titleError ? "border-red-500" : "border-white/10"}`}
                     />
+                    {titleError && <p className="text-xs text-red-500">{titleError}</p>}
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="url" className="text-sm font-medium text-zinc-300">
@@ -177,17 +217,21 @@ export default function Page() {
                       id="url"
                       placeholder="https://example.com"
                       value={newUrl}
-                      onChange={(e) => setNewUrl(e.target.value)}
-                      className="bg-black/50 border-white/10 text-white focus-visible:ring-purple-500 rounded-lg h-11"
+                      onChange={(e) => {
+                        setNewUrl(e.target.value);
+                        if (urlError) setUrlError("");
+                      }}
+                      className={`relative flex h-11 w-full rounded-lg bg-black/50 px-3 py-2 text-base text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm ${urlError ? "border-red-500 border-2" : "border border-white/10"}`}
                       dir="ltr"
                     />
+                    {urlError && <p className="text-xs text-red-500">{urlError}</p>}
                   </div>
                 </div>
                 <DialogFooter>
                   <Button
                     type="button"
                     variant="ghost"
-                    onClick={() => setIsDialogOpen(false)}
+                    onClick={() => handleOpenChange(false)}
                     className="hover:bg-white/10 text-zinc-300 hover:text-white rounded-lg"
                   >
                     취소
@@ -195,7 +239,6 @@ export default function Page() {
                   <Button
                     type="submit"
                     className="bg-purple-600 hover:bg-purple-700 text-white rounded-lg"
-                    disabled={!newTitle.trim() || !newUrl.trim()}
                   >
                     추가하기
                   </Button>

@@ -11,7 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { IconPencil, IconTrash } from "@tabler/icons-react";
+import { IconPencil, IconTrash, IconLoader2 } from "@tabler/icons-react";
 
 interface LinkCardProps {
   link: Link;
@@ -87,6 +87,7 @@ export default function LinkCard({ link, onUpdate, onDeleteClick }: LinkCardProp
               id={`edit-title-${link.id}`}
               placeholder="예: 내 블로그, Instagram"
               {...register("title")}
+              disabled={isSubmitting}
               className={`h-11 rounded-xl bg-zinc-50 border-zinc-200 focus-visible:ring-zinc-900 text-sm font-bold ${
                 errors.title ? "border-red-500 focus-visible:ring-red-500" : ""
               }`}
@@ -105,6 +106,7 @@ export default function LinkCard({ link, onUpdate, onDeleteClick }: LinkCardProp
               id={`edit-url-${link.id}`}
               placeholder="예: github.com/username 또는 https://..."
               {...register("url")}
+              disabled={isSubmitting}
               className={`h-11 rounded-xl bg-zinc-50 border-zinc-200 focus-visible:ring-zinc-900 text-sm font-bold ${
                 errors.url ? "border-red-500 focus-visible:ring-red-500" : ""
               }`}
@@ -125,10 +127,17 @@ export default function LinkCard({ link, onUpdate, onDeleteClick }: LinkCardProp
             </Button>
             <Button
               type="submit"
-              className="h-9 px-5 font-black rounded-xl bg-primary hover:opacity-90 text-primary-foreground shadow-sm transition-all active:scale-95 text-xs"
+              className="h-9 px-5 font-black rounded-xl bg-primary hover:opacity-90 text-primary-foreground shadow-sm transition-all active:scale-95 text-xs flex items-center justify-center gap-1.5"
               disabled={isSubmitting}
             >
-              저장
+              {isSubmitting ? (
+                <>
+                  <IconLoader2 className="animate-spin w-4 h-4" />
+                  <span>저장 중...</span>
+                </>
+              ) : (
+                "저장"
+              )}
             </Button>
           </div>
         </form>

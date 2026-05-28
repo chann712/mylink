@@ -21,17 +21,20 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { IconPlus } from "@tabler/icons-react";
+import { IconPlus, IconLoader2 } from "@tabler/icons-react";
 
 export default function Page() {
   const [links, setLinks] = useState<Link[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [deletingLink, setDeletingLink] = useState<Link | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Firestore에서 링크 목록 가져오기
   useEffect(() => {
     const fetchLinks = async () => {
       try {
+        setIsLoading(true);
         const linksRef = collection(db, "users", "anonymous", "links");
         const q = query(linksRef, orderBy("createdAt", "desc"));
         const querySnapshot = await getDocs(q);
@@ -57,6 +60,8 @@ export default function Page() {
         setLinks(fetchedLinks);
       } catch (err) {
         console.error("Failed to fetch links:", err);
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -67,7 +72,7 @@ export default function Page() {
     register,
     handleSubmit,
     reset,
-    formState: { errors },
+    formState: { errors, isSubmitting },
   } = useForm<LinkFormValues>({
     resolver: zodResolver(linkSchema),
     mode: "onChange",
@@ -78,6 +83,7 @@ export default function Page() {
   });
 
   const handleOpenChange = (open: boolean) => {
+    if (isSubmitting) return; // 제출 중에는 다이얼로그 닫기 방지
     setIsDialogOpen(open);
     if (!open) {
       reset();
@@ -120,12 +126,15 @@ export default function Page() {
   const handleDeleteConfirm = async () => {
     if (!deletingLink) return;
     try {
+      setIsDeleting(true);
       const docRef = doc(db, "users", "anonymous", "links", deletingLink.id);
       await deleteDoc(docRef);
       setLinks((prev) => prev.filter((l) => l.id !== deletingLink.id));
       setDeletingLink(null);
     } catch (err) {
       console.error("Failed to delete link:", err);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -174,6 +183,7 @@ export default function Page() {
                       id="title"
                       placeholder="예: 내 블로그, Instagram"
                       {...register("title")}
+                      disabled={isSubmitting}
                       className={`h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-zinc-900 text-base font-bold ${errors.title ? "border-red-500 focus-visible:ring-red-500" : ""}`}
                     />
                     {errors.title && <p className="text-xs font-bold text-red-500 ml-1">{errors.title.message}</p>}
@@ -186,6 +196,7 @@ export default function Page() {
                       id="url"
                       placeholder="예: github.com/username 또는 https://..."
                       {...register("url")}
+                      disabled={isSubmitting}
                       className={`h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-zinc-900 text-base font-bold ${errors.url ? "border-red-500 focus-visible:ring-red-500" : ""}`}
                       dir="ltr"
                     />
@@ -197,15 +208,24 @@ export default function Page() {
                     type="button"
                     variant="ghost"
                     onClick={() => handleOpenChange(false)}
+                    disabled={isSubmitting}
                     className="h-13 px-6 hover:bg-zinc-100 text-zinc-500 font-bold rounded-2xl flex-1"
                   >
                     취소
                   </Button>
                   <Button
                     type="submit"
-                    className="h-13 px-10 font-black rounded-2xl bg-primary hover:opacity-90 text-primary-foreground shadow-xl shadow-primary/20 transition-all active:scale-95 flex-1"
+                    disabled={isSubmitting}
+                    className="h-13 px-10 font-black rounded-2xl bg-primary hover:opacity-90 text-primary-foreground shadow-xl shadow-primary/20 transition-all active:scale-95 flex-1 flex items-center justify-center gap-2"
                   >
-                    추가
+                    {isSubmitting ? (
+                      <>
+                        <IconLoader2 className="animate-spin w-5 h-5" />
+                        <span>추가 중...</span>
+                      </>
+                    ) : (
+                      "추가"
+                    )}
                   </Button>
                 </DialogFooter>
               </form>
@@ -215,7 +235,12 @@ export default function Page() {
 
         {/* Link List */}
         <section className="w-full flex flex-col gap-3">
-          {links.length === 0 ? (
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-12 px-4 rounded-2xl border border-dashed border-zinc-200 bg-white/80 shadow-sm text-center backdrop-blur-sm">
+              <IconLoader2 className="w-8 h-8 animate-spin text-zinc-400 mb-2" />
+              <p className="text-sm font-bold text-zinc-400">링크를 불러오는 중입니다...</p>
+            </div>
+          ) : links.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 px-4 rounded-2xl border border-dashed border-zinc-200 bg-white/80 shadow-sm text-center backdrop-blur-sm">
               <span className="text-3xl mb-2">📁</span>
               <p className="text-sm font-bold text-zinc-400">아직 등록된 링크가 없습니다.</p>
@@ -243,7 +268,7 @@ export default function Page() {
       </div>
 
       {/* 삭제 확인 모달 */}
-      <Dialog open={!!deletingLink} onOpenChange={(open) => { if (!open) setDeletingLink(null); }}>
+      <Dialog open={!!deletingLink} onOpenChange={(open) => { if (!open && !isDeleting) setDeletingLink(null); }}>
         <DialogContent className="sm:max-w-[425px] bg-white border-zinc-200 text-zinc-900 rounded-3xl shadow-2xl p-0 overflow-hidden">
           <DialogHeader className="p-8 pb-4">
             <DialogTitle className="text-2xl font-black text-zinc-900">정말 삭제하시겠습니까?</DialogTitle>
@@ -269,6 +294,7 @@ export default function Page() {
               type="button"
               variant="ghost"
               onClick={() => setDeletingLink(null)}
+              disabled={isDeleting}
               className="h-13 px-6 hover:bg-zinc-100 text-zinc-500 font-bold rounded-2xl flex-1"
             >
               취소
@@ -277,9 +303,17 @@ export default function Page() {
               type="button"
               variant="destructive"
               onClick={handleDeleteConfirm}
-              className="h-13 px-6 font-black rounded-2xl transition-all active:scale-95 flex-1"
+              disabled={isDeleting}
+              className="h-13 px-6 font-black rounded-2xl transition-all active:scale-95 flex-1 flex items-center justify-center gap-2"
             >
-              삭제하기
+              {isDeleting ? (
+                <>
+                  <IconLoader2 className="animate-spin w-5 h-5" />
+                  <span>삭제 중...</span>
+                </>
+              ) : (
+                "삭제하기"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

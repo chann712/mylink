@@ -362,7 +362,7 @@ export default function MyPage() {
                 
                 {/* Add Link Dialog */}
                 <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
-                  <DialogTrigger className="inline-flex items-center justify-center h-10 px-4 gap-2 font-black text-sm rounded-xl bg-zinc-950 text-white hover:opacity-90 shadow-md transition-all active:scale-95 cursor-pointer">
+                  <DialogTrigger className="inline-flex items-center justify-center h-10 px-4 gap-2 font-black text-sm rounded-xl bg-[#5B5FC7] text-white hover:opacity-90 shadow-lg shadow-[#5B5FC7]/10 transition-all active:scale-95 cursor-pointer">
                     <IconPlus className="w-4 h-4" />
                     새 링크 추가
                   </DialogTrigger>
@@ -412,7 +412,7 @@ export default function MyPage() {
                         </Button>
                         <Button
                           type="submit"
-                          className="h-13 px-10 font-black rounded-2xl bg-zinc-950 text-white shadow-xl transition-all active:scale-95 flex-1"
+                          className="h-13 px-10 font-black rounded-2xl bg-[#5B5FC7] hover:opacity-90 text-white shadow-xl shadow-[#5B5FC7]/20 transition-all active:scale-95 flex-1"
                         >
                           추가
                         </Button>

@@ -68,16 +68,12 @@ function DialogContent({
       >
         {children}
         {showCloseButton && (
-          <BaseDialog.Close data-slot="dialog-close">
-             <Button
-              variant="ghost"
-              className="absolute top-4 right-4"
-              size="icon-sm"
-              asChild={false}
-            >
-              <IconX />
-              <span className="sr-only">Close</span>
-            </Button>
+          <BaseDialog.Close
+            data-slot="dialog-close"
+            className="absolute top-4 right-4 inline-flex items-center justify-center rounded-lg p-1.5 text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 transition-all cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-zinc-950"
+          >
+            <IconX className="w-4.5 h-4.5" />
+            <span className="sr-only">Close</span>
           </BaseDialog.Close>
         )}
       </BaseDialog.Popup>
@@ -114,8 +110,8 @@ function DialogFooter({
     >
       {children}
       {showCloseButton && (
-        <BaseDialog.Close>
-          <Button variant="outline">Close</Button>
+        <BaseDialog.Close className="inline-flex items-center justify-center h-10 px-4 text-sm font-semibold rounded-lg border border-zinc-200 text-zinc-700 bg-white hover:bg-zinc-50 transition-all cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-zinc-950">
+          Close
         </BaseDialog.Close>
       )}
     </div>

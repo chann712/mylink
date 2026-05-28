@@ -58,9 +58,10 @@ export default function Page() {
     register,
     handleSubmit,
     reset,
-    formState: { errors },
+    formState: { errors, isValid },
   } = useForm<LinkFormValues>({
     resolver: zodResolver(linkSchema),
+    mode: "onChange",
     defaultValues: {
       title: "",
       url: "",
@@ -169,7 +170,8 @@ export default function Page() {
                   </Button>
                   <Button
                     type="submit"
-                    className="h-13 px-10 font-black rounded-2xl bg-primary hover:opacity-90 text-primary-foreground shadow-xl shadow-primary/20 transition-all active:scale-95 flex-1"
+                    disabled={!isValid}
+                    className="h-13 px-10 font-black rounded-2xl bg-primary hover:opacity-90 text-primary-foreground shadow-xl shadow-primary/20 transition-all active:scale-95 flex-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
                   >
                     추가
                   </Button>

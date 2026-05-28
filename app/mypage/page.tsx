@@ -143,8 +143,7 @@ export default function MyPage() {
                   </Button>
                   <Button
                     type="submit"
-                    className="h-13 px-10 font-black rounded-2xl shadow-xl shadow-indigo-100 transition-all active:scale-95 flex-1"
-                    style={{ backgroundColor: "#5B5FC7", color: "#FFFFFF" }}
+                    className="h-13 px-10 font-black rounded-2xl bg-primary text-primary-foreground shadow-xl shadow-primary/20 transition-all active:scale-95 flex-1"
                   >
                     추가
                   </Button>

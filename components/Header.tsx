@@ -64,7 +64,7 @@ export default function Header({ user, displayName, onLogin, onLogout, isLoading
         {/* Left Side: Brand Logo */}
         <div className="flex items-center gap-6">
           <Link href="/" className="flex items-center gap-2 group">
-            <span className="text-xl font-black tracking-tight text-blue-600 hover:text-blue-700 transition-colors select-none">
+            <span className="text-xl font-black tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent hover:opacity-90 transition-opacity select-none">
               MyLink
             </span>
           </Link>

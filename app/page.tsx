@@ -12,7 +12,13 @@ import {
 } from "firebase/auth";
 import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
-import { IconBrandGoogle, IconLoader2 } from "@tabler/icons-react";
+import {
+  IconBrandGoogle,
+  IconLoader2,
+  IconBrandGithub,
+  IconArticle,
+  IconArrowRight,
+} from "@tabler/icons-react";
 
 export default function Page() {
   const router = useRouter();
@@ -54,7 +60,7 @@ export default function Page() {
   }, [router]);
 
   return (
-    <div className="min-h-svh bg-white flex flex-col">
+    <div className="min-h-svh bg-zinc-50/30 flex flex-col">
       <Header
         user={user}
         displayName=""
@@ -64,9 +70,9 @@ export default function Page() {
       />
 
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-16 selection:bg-blue-100 text-zinc-900 font-sans relative overflow-hidden">
-        {/* Soft background ambient glow */}
-        <div className="fixed top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-blue-50/40 blur-[120px] pointer-events-none z-0" />
-        <div className="fixed bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] rounded-full bg-indigo-50/40 blur-[120px] pointer-events-none z-0" />
+        {/* Soft background ambient aurora glow */}
+        <div className="fixed top-[-15%] left-[-15%] w-[60vw] h-[60vw] rounded-full bg-blue-200/20 blur-[130px] pointer-events-none z-0" />
+        <div className="fixed bottom-[-15%] right-[-15%] w-[60vw] h-[60vw] rounded-full bg-indigo-200/20 blur-[130px] pointer-events-none z-0" />
 
         {authLoading ? (
           <div className="flex flex-col items-center justify-center py-12 z-10">
@@ -75,10 +81,13 @@ export default function Page() {
           </div>
         ) : (
           <div className="relative w-full max-w-4xl flex flex-col items-center text-center z-10 my-auto">
-            {/* Hero Main Heading */}
-            <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-zinc-900 mb-6 leading-tight max-w-3xl">
+            {/* Hero Main Heading with premium gradient */}
+            <h1 className="text-5xl sm:text-7xl font-extrabold tracking-tight text-zinc-950 mb-6 leading-[1.1] max-w-3xl">
               Development in{" "}
-              <span className="text-blue-600 font-extrabold">One Link</span>.
+              <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent font-black">
+                One Link
+              </span>
+              .
             </h1>
 
             {/* Hero Sub Description */}
@@ -91,41 +100,63 @@ export default function Page() {
             {/* Hero CTA Button: Google Login */}
             <Button
               onClick={handleLogin}
-              className="h-14 px-8 gap-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold transition-all shadow-lg shadow-blue-600/20 active:scale-[0.98] cursor-pointer text-base sm:text-lg mb-16"
+              className="h-14 px-8 gap-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold transition-all shadow-lg hover:shadow-xl hover:shadow-blue-500/25 hover:-translate-y-0.5 active:scale-[0.98] cursor-pointer text-base sm:text-lg mb-16 duration-300"
             >
               <IconBrandGoogle className="w-5 h-5 stroke-[2.5]" />
               <span>Google로 시작하기</span>
             </Button>
 
-            {/* Elegant 3D Mockup Illustration using pure CSS */}
+            {/* Elegant 3D Glassmorphism Mockup Illustration */}
             <div
-              className="relative w-full max-w-[380px] aspect-[16/10] bg-white border border-zinc-200/50 rounded-3xl p-6 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.08)] select-none pointer-events-none transition-transform duration-500 hover:scale-[1.02] flex flex-col justify-between"
+              className="relative w-full max-w-[360px] aspect-[16/10] bg-white/70 backdrop-blur-xl border border-white/50 rounded-3xl p-6 shadow-[0_30px_70px_-15px_rgba(0,0,0,0.06)] select-none pointer-events-none transition-transform duration-500 hover:scale-[1.03] flex flex-col justify-between"
               style={{
-                transform: "perspective(1200px) rotateX(14deg) rotateY(-8deg) rotateZ(-12deg) skewX(2deg)",
+                transform: "perspective(1200px) rotateX(15deg) rotateY(-8deg) rotateZ(-12deg) skewX(2deg)",
                 transformStyle: "preserve-3d",
               }}
             >
-              {/* Mockup Profile Info Row */}
-              <div className="flex items-center gap-3.5 mb-6">
-                <div className="w-10 h-10 rounded-full bg-zinc-100 shrink-0" />
-                <div className="flex flex-col gap-1.5 w-full">
-                  <div className="w-24 h-3 bg-zinc-100 rounded-full" />
-                  <div className="w-14 h-2 bg-zinc-50 rounded-full" />
+              {/* Mockup Profile Info Row (Real data feel) */}
+              <div className="flex items-center gap-3.5 mb-6 text-left">
+                <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-500 flex items-center justify-center text-white font-black text-sm border border-white shadow-sm shrink-0">
+                  M
+                </div>
+                <div className="flex flex-col gap-1 w-full">
+                  <span className="text-[13px] font-black text-zinc-800 leading-none">
+                    minsoo.dev
+                  </span>
+                  <div className="flex">
+                    <span className="text-[8px] font-black tracking-wide text-blue-600 bg-blue-50/80 border border-blue-100/50 px-2 py-0.5 rounded-full uppercase">
+                      Frontend Dev
+                    </span>
+                  </div>
                 </div>
               </div>
 
               {/* Mockup Links Area */}
-              <div className="flex flex-col gap-2.5 w-full">
-                {/* Link slot 1 (Highlighted Active Link in blue) */}
-                <div className="w-full h-11 bg-blue-50/30 border border-blue-100/50 rounded-xl flex items-center px-3.5">
-                  <div className="w-5 h-5 rounded-full bg-blue-100 border border-blue-200 shrink-0" />
-                  <div className="w-full h-4 bg-blue-100/50 rounded-lg ml-3" />
+              <div className="flex flex-col gap-2.5 w-full text-left">
+                {/* Link slot 1 (GitHub) */}
+                <div className="w-full h-12 bg-white/90 border border-zinc-100 rounded-xl flex items-center justify-between px-3.5 shadow-[0_2px_4px_rgba(0,0,0,0.02)]">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-6 h-6 rounded-lg bg-zinc-950 text-white flex items-center justify-center shrink-0">
+                      <IconBrandGithub className="w-3.5 h-3.5 stroke-[2.5]" />
+                    </div>
+                    <span className="text-[11px] font-black text-zinc-700">
+                      GitHub / @minsoo-dev
+                    </span>
+                  </div>
+                  <IconArrowRight className="w-3 h-3 text-zinc-300 stroke-[3]" />
                 </div>
 
-                {/* Link slot 2 (Soft Gray Link) */}
-                <div className="w-full h-11 bg-zinc-50/50 border border-zinc-100 rounded-xl flex items-center px-3.5">
-                  <div className="w-5 h-5 rounded-full bg-zinc-100 shrink-0" />
-                  <div className="w-full h-4 bg-zinc-100/60 rounded-lg ml-3" />
+                {/* Link slot 2 (Tech Blog) */}
+                <div className="w-full h-12 bg-white/90 border border-zinc-100 rounded-xl flex items-center justify-between px-3.5 shadow-[0_2px_4px_rgba(0,0,0,0.02)]">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-6 h-6 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
+                      <IconArticle className="w-3.5 h-3.5 stroke-[2.5]" />
+                    </div>
+                    <span className="text-[11px] font-black text-zinc-700">
+                      Tech Blog / devlog
+                    </span>
+                  </div>
+                  <IconArrowRight className="w-3 h-3 text-zinc-300 stroke-[3]" />
                 </div>
               </div>
             </div>
@@ -135,4 +166,5 @@ export default function Page() {
     </div>
   );
 }
+
 

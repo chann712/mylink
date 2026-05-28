@@ -54,6 +54,20 @@ export default function Header({ user, displayName, onLogin, onLogout, isLoading
             <div className="h-9 w-24 animate-pulse rounded-xl bg-zinc-100" />
           ) : user ? (
             <div className="flex items-center gap-3.5">
+              {/* Profile Avatar */}
+              {user?.photoURL ? (
+                <img
+                  src={user.photoURL}
+                  alt={`${getUserDisplayName()} 프로필 아바타`}
+                  className="w-8 h-8 rounded-full object-cover border border-zinc-200 shadow-sm select-none"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="flex w-8 h-8 rounded-full bg-zinc-900 text-white font-black text-sm items-center justify-center border border-zinc-700 shadow-sm select-none">
+                  {getUserDisplayName().charAt(0).toUpperCase()}
+                </div>
+              )}
+
               <span className="text-sm font-bold text-zinc-700">
                 <span className="text-zinc-950 font-black">{getUserDisplayName()}</span>님
               </span>

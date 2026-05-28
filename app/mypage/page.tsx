@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import { dummyLinks, type Link } from "@/data/links";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,41 +18,53 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { IconPlus, IconTrash, IconDeviceMobile, IconLock } from "@tabler/icons-react";
+import { IconPlus, IconTrash, IconLock } from "@tabler/icons-react";
+
+// Zod 스키마 정의
+const linkSchema = z.object({
+  title: z.string().min(1, "제목을 입력해주세요").max(50, "제목은 50자 이내로 입력해주세요"),
+  url: z.string().min(1, "주소를 입력해주세요").refine((val) => {
+    let url = val.trim();
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      url = "https://" + url;
+    }
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  }, { message: "올바른 URL 형식이 아닙니다" }),
+});
+
+type LinkFormValues = z.infer<typeof linkSchema>;
 
 export default function MyPage() {
   const [links, setLinks] = useState<Link[]>(dummyLinks);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  
-  // Form State
-  const [newTitle, setNewTitle] = useState("");
-  const [newUrl, setNewUrl] = useState("");
-  const [error, setError] = useState("");
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<LinkFormValues>({
+    resolver: zodResolver(linkSchema),
+    defaultValues: {
+      title: "",
+      url: "",
+    },
+  });
 
   const handleOpenChange = (open: boolean) => {
     setIsDialogOpen(open);
     if (!open) {
-      setNewTitle("");
-      setNewUrl("");
-      setError("");
+      reset();
     }
   };
 
-  const handleAddLink = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-
-    if (!newTitle.trim()) {
-      alert("제목을 입력해주세요");
-      return;
-    }
-
-    if (!newUrl.trim()) {
-      alert("주소를 입력해주세요");
-      return;
-    }
-
-    let formattedUrl = newUrl.trim();
+  const onSubmit = (data: LinkFormValues) => {
+    let formattedUrl = data.url.trim();
     if (!formattedUrl.startsWith("http://") && !formattedUrl.startsWith("https://")) {
       formattedUrl = "https://" + formattedUrl;
     }
@@ -61,7 +76,7 @@ export default function MyPage() {
 
       const newLinkItem: Link = {
         id: `link-admin-${Date.now()}`,
-        title: newTitle.trim(),
+        title: data.title.trim(),
         url: formattedUrl,
         faviconUrl,
         createdAt: new Date().toISOString(),
@@ -70,7 +85,8 @@ export default function MyPage() {
       setLinks((prev) => [newLinkItem, ...prev]);
       handleOpenChange(false);
     } catch (err) {
-      setError("올바른 URL 형식을 입력해주세요.");
+      // Zod에서 이미 걸러내지만 안전을 위해 추가
+      console.error("URL parsing error", err);
     }
   };
 
@@ -93,7 +109,7 @@ export default function MyPage() {
       <div className="fixed bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] rounded-full bg-slate-200/40 blur-[100px] pointer-events-none" />
       
       <div className="relative w-full max-w-[480px] flex flex-col items-center z-10 my-auto">
-        {/* Profile Header (Public과 동일) */}
+        {/* Profile Header */}
         <header className="mb-10 w-full flex flex-col items-center text-center">
           <div className="mb-5 inline-flex items-center justify-center rounded-full bg-white px-8 py-3 border border-zinc-200 shadow-sm transition-shadow">
             <h1 className="text-3xl font-extrabold tracking-tight text-zinc-900">
@@ -105,7 +121,7 @@ export default function MyPage() {
           </p>
         </header>
 
-        {/* Action Area: Add Link Button (Public과 동일한 스타일) */}
+        {/* Action Area: Add Link Button */}
         <section className="w-full mb-6 relative">
           <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
@@ -117,7 +133,7 @@ export default function MyPage() {
               </button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px] bg-white border-zinc-200 text-zinc-900 rounded-3xl shadow-2xl p-0 overflow-hidden">
-              <form onSubmit={handleAddLink}>
+              <form onSubmit={handleSubmit(onSubmit)}>
                 <DialogHeader className="p-8 pb-4">
                   <DialogTitle className="text-2xl font-black text-zinc-900">새 링크 추가</DialogTitle>
                   <DialogDescription className="text-zinc-500 font-medium mt-1">
@@ -132,10 +148,10 @@ export default function MyPage() {
                     <Input
                       id="title"
                       placeholder="링크 제목 입력"
-                      value={newTitle}
-                      onChange={(e) => setNewTitle(e.target.value)}
-                      className="h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-primary text-base font-bold"
+                      {...register("title")}
+                      className={`h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-primary text-base font-bold ${errors.title ? "border-red-500 focus-visible:ring-red-500" : ""}`}
                     />
+                    {errors.title && <p className="text-xs font-bold text-red-500 ml-1">{errors.title.message}</p>}
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="url" className="text-xs font-black uppercase tracking-widest text-zinc-400 ml-1">
@@ -144,13 +160,12 @@ export default function MyPage() {
                     <Input
                       id="url"
                       placeholder="https://..."
-                      value={newUrl}
-                      onChange={(e) => setNewUrl(e.target.value)}
-                      className="h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-primary text-base font-bold"
+                      {...register("url")}
+                      className={`h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-primary text-base font-bold ${errors.url ? "border-red-500 focus-visible:ring-red-500" : ""}`}
                       dir="ltr"
                     />
+                    {errors.url && <p className="text-xs font-bold text-red-500 ml-1">{errors.url.message}</p>}
                   </div>
-                  {error && <p className="text-sm font-bold text-red-500 ml-1">{error}</p>}
                 </div>
                 <DialogFooter className="p-8 pt-4 flex-col sm:flex-row gap-3">
                   <Button
@@ -173,7 +188,7 @@ export default function MyPage() {
           </Dialog>
         </section>
 
-        {/* Link List (Public과 동일한 카드 디자인에 삭제 버튼 추가) */}
+        {/* Link List */}
         <section className="w-full flex flex-col gap-3">
           {links.map((link) => (
             <div

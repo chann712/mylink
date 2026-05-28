@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import { dummyLinks, type Link } from "@/data/links";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,78 +20,73 @@ import {
 } from "@/components/ui/dialog";
 import { IconPlus } from "@tabler/icons-react";
 
+// Zod 스키마 정의
+const linkSchema = z.object({
+  title: z.string().min(1, "제목을 입력해주세요").max(50, "제목은 50자 이내로 입력해주세요"),
+  url: z.string().min(1, "주소를 입력해주세요").refine((val) => {
+    let url = val.trim();
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      url = "https://" + url;
+    }
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  }, { message: "올바른 URL 형식을 입력해주세요" }),
+});
+
+type LinkFormValues = z.infer<typeof linkSchema>;
+
 export default function Page() {
   const [links, setLinks] = useState<Link[]>(dummyLinks);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   
-  // Form State
-  const [newTitle, setNewTitle] = useState("");
-  const [newUrl, setNewUrl] = useState("");
-  const [titleError, setTitleError] = useState("");
-  const [urlError, setUrlError] = useState("");
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<LinkFormValues>({
+    resolver: zodResolver(linkSchema),
+    defaultValues: {
+      title: "",
+      url: "",
+    },
+  });
 
   const handleOpenChange = (open: boolean) => {
     setIsDialogOpen(open);
     if (!open) {
-      setNewTitle("");
-      setNewUrl("");
-      setTitleError("");
-      setUrlError("");
+      reset();
     }
   };
 
-  const handleAddLink = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!newTitle.trim()) {
-      alert("제목을 입력해주세요");
-      return;
-    }
-
-    if (!newUrl.trim()) {
-      alert("주소를 입력해주세요");
-      return;
-    }
-
-    let formattedUrl = newUrl.trim();
+  const onSubmit = (data: LinkFormValues) => {
+    let formattedUrl = data.url.trim();
     if (!formattedUrl.startsWith("http://") && !formattedUrl.startsWith("https://")) {
       formattedUrl = "https://" + formattedUrl;
     }
 
     try {
       const urlObj = new URL(formattedUrl);
-      if (!urlObj.hostname.includes(".")) {
-        alert("올바른 도메인 주소를 입력해주세요.");
-        return;
-      }
+      const domain = urlObj.hostname;
+      const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+
+      const newLinkItem: Link = {
+        id: `link-temp-${Date.now()}`,
+        title: data.title.trim(),
+        url: formattedUrl,
+        faviconUrl,
+        createdAt: new Date().toISOString(),
+      };
+
+      setLinks((prev) => [...prev, newLinkItem]);
+      handleOpenChange(false);
     } catch (err) {
-      alert("올바른 URL 형식이 아닙니다.");
-      return;
+      console.error("URL parsing error", err);
     }
-
-    let domain = "";
-    try {
-      const urlObj = new URL(formattedUrl);
-      domain = urlObj.hostname;
-    } catch (error) {
-      // url 파싱 실패 시 원본 문자열 기반으로 시도
-      domain = formattedUrl.replace(/^https?:\/\//, "").split("/")[0];
-    }
-
-    const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
-
-    const newLinkItem: Link = {
-      id: `link-temp-${Date.now()}`,
-      title: newTitle.trim(),
-      url: formattedUrl,
-      faviconUrl,
-      createdAt: new Date().toISOString(),
-    };
-
-    setLinks((prev) => [...prev, newLinkItem]);
-    
-    // Reset and close
-    handleOpenChange(false);
   };
 
   return (
@@ -110,7 +108,7 @@ export default function Page() {
           </p>
         </header>
 
-        {/* Action Area: Add Link Button (Now at the top) */}
+        {/* Action Area: Add Link Button */}
         <section className="w-full mb-6 relative">
           <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
@@ -122,7 +120,7 @@ export default function Page() {
               </button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px] bg-white border-zinc-200 text-zinc-900 rounded-2xl shadow-2xl">
-              <form onSubmit={handleAddLink}>
+              <form onSubmit={handleSubmit(onSubmit)}>
                 <DialogHeader>
                   <DialogTitle className="text-xl font-bold text-zinc-900">새 링크 추가</DialogTitle>
                   <DialogDescription className="text-zinc-500 mt-1">
@@ -134,34 +132,26 @@ export default function Page() {
                     <Label htmlFor="title" className="text-sm font-semibold text-zinc-700">
                       제목
                     </Label>
-                    <Input
+                    <input
                       id="title"
                       placeholder="예: 내 블로그, Instagram"
-                      value={newTitle}
-                      onChange={(e) => {
-                        setNewTitle(e.target.value);
-                        if (titleError) setTitleError("");
-                      }}
-                      className={`h-12 rounded-xl bg-zinc-50 text-zinc-900 border-zinc-200 focus-visible:ring-zinc-900 ${titleError ? "border-red-500 ring-1 ring-red-500" : ""}`}
+                      {...register("title")}
+                      className={`flex h-12 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm font-bold text-zinc-900 ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${errors.title ? "border-red-500 focus-visible:ring-red-500" : ""}`}
                     />
-                    {titleError && <p className="text-xs font-medium text-red-500 mt-1">{titleError}</p>}
+                    {errors.title && <p className="text-xs font-medium text-red-500 mt-1">{errors.title.message}</p>}
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="url" className="text-sm font-semibold text-zinc-700">
                       URL
                     </Label>
-                    <Input
+                    <input
                       id="url"
                       placeholder="https://example.com"
-                      value={newUrl}
-                      onChange={(e) => {
-                        setNewUrl(e.target.value);
-                        if (urlError) setUrlError("");
-                      }}
-                      className={`h-12 rounded-xl bg-zinc-50 text-zinc-900 border-zinc-200 focus-visible:ring-zinc-900 ${urlError ? "border-red-500 ring-1 ring-red-500" : ""}`}
+                      {...register("url")}
+                      className={`flex h-12 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm font-bold text-zinc-900 ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${errors.url ? "border-red-500 focus-visible:ring-red-500" : ""}`}
                       dir="ltr"
                     />
-                    {urlError && <p className="text-xs font-medium text-red-500 mt-1">{urlError}</p>}
+                    {errors.url && <p className="text-xs font-medium text-red-500 mt-1">{errors.url.message}</p>}
                   </div>
                 </div>
                 <DialogFooter className="gap-2">

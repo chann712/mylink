@@ -413,8 +413,7 @@ export default function MyPage() {
                         </Button>
                         <Button
                           type="submit"
-                          disabled={!isValid}
-                          className="h-13 px-10 font-black rounded-2xl bg-primary hover:opacity-90 text-primary-foreground shadow-xl shadow-primary/20 transition-all active:scale-95 flex-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+                          className="h-13 px-10 font-black rounded-2xl bg-primary hover:opacity-90 text-primary-foreground shadow-xl shadow-primary/20 transition-all active:scale-95 flex-1"
                         >
                           추가
                         </Button>

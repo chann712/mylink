@@ -3,11 +3,30 @@
 import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { db } from "@/lib/firebase";
-import { collection, addDoc, getDocs, query, orderBy, serverTimestamp, doc, deleteDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
+import {
+  signInWithPopup,
+  GoogleAuthProvider,
+  signOut,
+  onAuthStateChanged,
+  type User,
+} from "firebase/auth";
+import {
+  collection,
+  addDoc,
+  getDocs,
+  query,
+  orderBy,
+  serverTimestamp,
+  doc,
+  deleteDoc,
+  getDoc,
+  setDoc,
+} from "firebase/firestore";
 import { type Link } from "@/data/links";
 import { linkSchema, type LinkFormValues } from "@/lib/schemas";
 import LinkCard from "@/components/LinkCard";
+import Header from "@/components/Header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -29,17 +48,22 @@ import {
   IconCheck,
   IconArrowRight,
   IconLoader2,
+  IconBrandGoogle,
 } from "@tabler/icons-react";
 
 export default function MyPage() {
   const [links, setLinks] = useState<Link[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [deletingLink, setDeletingLink] = useState<Link | null>(null);
-  
+
   // 로딩 및 제출 상태 관리
   const [isLoading, setIsLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Auth 및 Firestore 연동 상태
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
   // 프로필 정보 상태
   const [displayName, setDisplayName] = useState("My Links");
@@ -54,42 +78,103 @@ export default function MyPage() {
   const nameInputRef = useRef<HTMLInputElement>(null);
   const bioTextareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Firestore에서 링크 목록 가져오기
+  // 구글 로그인 처리
+  const handleLogin = async () => {
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (err) {
+      console.error("Login failed:", err);
+    }
+  };
+
+  // 로그아웃 처리
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.error("Logout failed:", err);
+    }
+  };
+
+  // Auth 상태 및 데이터 구독
   useEffect(() => {
-    const fetchLinks = async () => {
-      try {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setAuthLoading(true);
+      if (currentUser) {
+        setUser(currentUser);
         setIsLoading(true);
-        const linksRef = collection(db, "users", "anonymous", "links");
-        const q = query(linksRef, orderBy("createdAt", "desc"));
-        const querySnapshot = await getDocs(q);
-        const fetchedLinks: Link[] = [];
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          let faviconUrl = "";
-          try {
-            const urlObj = new URL(data.url || "");
-            faviconUrl = `https://www.google.com/s2/favicons?domain=${urlObj.hostname}&sz=64`;
-          } catch {
-            // URL 형식 오류 시 기본 빈 값 처리
+        try {
+          // 1. users/{user.uid} 도큐먼트 확인 및 동기화
+          const userDocRef = doc(db, "users", currentUser.uid);
+          const userDocSnap = await getDoc(userDocRef);
+
+          let currentDisplayName = "";
+          let currentBio = "안녕하세요. 모든 작업물과 소셜 미디어를 한곳에서 확인하실 수 있습니다.";
+
+          if (userDocSnap.exists()) {
+            const userData = userDocSnap.data();
+            currentDisplayName = userData.displayName || currentUser.displayName || currentUser.email?.split("@")[0] || "My Links";
+            currentBio = userData.bio !== undefined ? userData.bio : currentBio;
+          } else {
+            // 최초 로그인 시 가입 처리 (구글 메일 앞부분 추출하여 displayName 설정)
+            const emailPrefix = currentUser.email?.split("@")[0] || "user";
+            currentDisplayName = emailPrefix;
+
+            await setDoc(userDocRef, {
+              email: currentUser.email,
+              displayName: currentDisplayName,
+              bio: currentBio,
+              createdAt: serverTimestamp(),
+            });
           }
 
-          fetchedLinks.push({
-            id: doc.id,
-            title: data.title || "",
-            url: data.url || "",
-            faviconUrl: faviconUrl,
-            createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-          });
-        });
-        setLinks(fetchedLinks);
-      } catch (err) {
-        console.error("Failed to fetch links:", err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+          setDisplayName(currentDisplayName);
+          setBio(currentBio);
 
-    fetchLinks();
+          // 2. 해당 사용자의 links 서브컬렉션 로드
+          const linksRef = collection(db, "users", currentUser.uid, "links");
+          const q = query(linksRef, orderBy("createdAt", "desc"));
+          const querySnapshot = await getDocs(q);
+          const fetchedLinks: Link[] = [];
+
+          querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            let faviconUrl = "";
+            try {
+              const urlObj = new URL(data.url || "");
+              faviconUrl = `https://www.google.com/s2/favicons?domain=${urlObj.hostname}&sz=64`;
+            } catch {
+              // URL 형식 오류 시 기본 빈 값 처리
+            }
+
+            fetchedLinks.push({
+              id: doc.id,
+              title: data.title || "",
+              url: data.url || "",
+              faviconUrl: faviconUrl,
+              createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+            });
+          });
+          setLinks(fetchedLinks);
+        } catch (err) {
+          console.error("Error loading user data or links:", err);
+        } finally {
+          setIsLoading(false);
+          setAuthLoading(false);
+        }
+      } else {
+        // 로그아웃 상태
+        setUser(null);
+        setLinks([]);
+        setDisplayName("My Links");
+        setBio("안녕하세요. 모든 작업물과 소셜 미디어를 한곳에서 확인하실 수 있습니다.");
+        setIsLoading(false);
+        setAuthLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   // 포커스 제어
@@ -131,6 +216,7 @@ export default function MyPage() {
 
   // 신규 링크 추가
   const onSubmit = async (data: LinkFormValues) => {
+    if (!user) return;
     try {
       setIsAdding(true);
       const urlObj = new URL(data.url);
@@ -138,7 +224,7 @@ export default function MyPage() {
       const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
 
       // Firestore에 데이터 저장
-      const linksRef = collection(db, "users", "anonymous", "links");
+      const linksRef = collection(db, "users", user.uid, "links");
       const docRef = await addDoc(linksRef, {
         title: data.title.trim(),
         url: data.url,
@@ -170,10 +256,10 @@ export default function MyPage() {
 
   // 링크 삭제 승인 처리
   const handleDeleteConfirm = async () => {
-    if (!deletingLink) return;
+    if (!deletingLink || !user) return;
     try {
       setIsDeleting(true);
-      const docRef = doc(db, "users", "anonymous", "links", deletingLink.id);
+      const docRef = doc(db, "users", user.uid, "links", deletingLink.id);
       await deleteDoc(docRef);
       setLinks((prev) => prev.filter((l) => l.id !== deletingLink.id));
       setDeletingLink(null);
@@ -185,18 +271,25 @@ export default function MyPage() {
   };
 
   // 닉네임 편집 저장 및 롤백
-  const handleNameSave = () => {
+  const handleNameSave = async () => {
     const trimmed = tempName.trim();
     if (trimmed === "") {
       setTempName(displayName); // 무음 롤백
     } else {
       setDisplayName(trimmed);
+      if (user) {
+        try {
+          await setDoc(doc(db, "users", user.uid), { displayName: trimmed, updatedAt: serverTimestamp() }, { merge: true });
+        } catch (err) {
+          console.error("Failed to save display name:", err);
+        }
+      }
     }
     setIsEditingName(false);
   };
 
   // 소개글 편집 저장 및 롤백
-  const handleBioSave = () => {
+  const handleBioSave = async () => {
     const trimmed = tempBio.trim();
     if (trimmed === "") {
       setTempBio(bio); // 무음 롤백
@@ -204,342 +297,392 @@ export default function MyPage() {
       setTempBio(bio); // 글자수 제한 초과 시 롤백
     } else {
       setBio(trimmed);
+      if (user) {
+        try {
+          await setDoc(doc(db, "users", user.uid), { bio: trimmed, updatedAt: serverTimestamp() }, { merge: true });
+        } catch (err) {
+          console.error("Failed to save bio:", err);
+        }
+      }
     }
     setIsEditingBio(false);
   };
 
   return (
-    <main className="relative min-h-svh bg-zinc-50/50 text-zinc-950 font-sans px-4 py-8 selection:bg-zinc-200">
-      {/* Background ambient lighting */}
-      <div className="fixed top-[-10vw] left-[-10vw] w-[40vw] h-[40vw] rounded-full bg-zinc-200/50 blur-[120px] pointer-events-none z-0" />
-      <div className="fixed bottom-[-10vw] right-[-10vw] w-[40vw] h-[40vw] rounded-full bg-slate-200/50 blur-[120px] pointer-events-none z-0" />
+    <div className="min-h-svh bg-zinc-50/50 flex flex-col">
+      <Header
+        user={user}
+        displayName={displayName}
+        onLogin={handleLogin}
+        onLogout={handleLogout}
+        isLoading={authLoading}
+      />
 
-      {/* Admin Mode Badge */}
-      <div className="fixed top-6 left-6 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-widest shadow-xl">
-        <IconLock className="w-3.5 h-3.5 text-emerald-400" />
-        Admin Mode
-      </div>
+      <main className="relative flex-1 text-zinc-950 font-sans px-4 py-8 selection:bg-zinc-200">
+        {/* Background ambient lighting */}
+        <div className="fixed top-[-10vw] left-[-10vw] w-[40vw] h-[40vw] rounded-full bg-zinc-200/50 blur-[120px] pointer-events-none z-0" />
+        <div className="fixed bottom-[-10vw] right-[-10vw] w-[40vw] h-[40vw] rounded-full bg-slate-200/50 blur-[120px] pointer-events-none z-0" />
 
-      <div className="relative max-w-6xl mx-auto z-10 w-full mt-10">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          
-          {/* LEFT: Editing Panel (7 columns) */}
-          <section className="lg:col-span-7 flex flex-col gap-6">
-            
-            {/* Header & Title */}
-            <div className="flex flex-col gap-1 pb-4 border-b border-zinc-200/60">
-              <h1 className="text-3xl font-black tracking-tight text-zinc-900">대시보드</h1>
-              <p className="text-sm font-semibold text-zinc-500">프로필 정보와 링크들을 실시간으로 편집 관리하세요.</p>
-            </div>
-
-            {/* Profile Info Setup Card */}
-            <Card className="bg-white border-zinc-200/60 shadow-sm rounded-2xl overflow-hidden p-6">
-              <h2 className="text-sm font-black uppercase tracking-wider text-zinc-400 mb-6">프로필 설정</h2>
-              
-              <div className="flex flex-col gap-5">
-                {/* Nickname (displayName) */}
-                <div className="flex flex-col gap-2">
-                  <Label className="text-xs font-bold text-zinc-500">닉네임</Label>
-                  {isEditingName ? (
-                    <div className="flex gap-2">
-                      <Input
-                        ref={nameInputRef}
-                        value={tempName}
-                        onChange={(e) => setTempName(e.target.value)}
-                        onBlur={handleNameSave}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") handleNameSave();
-                          if (e.key === "Escape") {
-                            setTempName(displayName);
-                            setIsEditingName(false);
-                          }
-                        }}
-                        className="h-11 rounded-xl bg-zinc-50 border-zinc-200 font-bold focus-visible:ring-zinc-900"
-                      />
-                      <Button onClick={handleNameSave} size="icon" className="h-11 w-11 rounded-xl bg-zinc-900 text-white hover:bg-zinc-800 shrink-0">
-                        <IconCheck className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <div
-                      onClick={() => {
-                        setTempName(displayName);
-                        setIsEditingName(true);
-                      }}
-                      className="group flex items-center justify-between h-11 px-4 rounded-xl bg-zinc-50 hover:bg-zinc-100/80 border border-zinc-200/50 cursor-pointer transition-colors"
-                    >
-                      <span className="font-bold text-zinc-900">{displayName}</span>
-                      <IconEdit className="w-4 h-4 text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
-                  )}
+        {authLoading ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-50/50 backdrop-blur-sm z-50">
+            <IconLoader2 className="w-10 h-10 animate-spin text-zinc-800" />
+            <p className="text-sm font-bold text-zinc-500 mt-3">사용자 정보를 불러오는 중...</p>
+          </div>
+        ) : !user ? (
+          /* 로그인 유도 화면 */
+          <div className="relative max-w-md mx-auto z-10 w-full mt-16 text-center">
+            <Card className="bg-white border-zinc-200/80 shadow-2xl rounded-3xl p-8 sm:p-12 overflow-hidden relative">
+              <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] rounded-full bg-zinc-100/50 blur-[80px] pointer-events-none" />
+              <div className="relative flex flex-col items-center">
+                <div className="w-16 h-16 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-center shadow-sm mb-6 text-zinc-900 font-black text-2xl">
+                  ML
                 </div>
-
-                {/* Bio (Introduction) */}
-                <div className="flex flex-col gap-2">
-                  <div className="flex justify-between items-center">
-                    <Label className="text-xs font-bold text-zinc-500">소개글</Label>
-                    <span className="text-[10px] font-bold text-zinc-400">
-                      {isEditingBio ? tempBio.length : bio.length}/80자
-                    </span>
-                  </div>
-                  {isEditingBio ? (
-                    <div className="flex flex-col gap-2">
-                      <textarea
-                        ref={bioTextareaRef}
-                        value={tempBio}
-                        onChange={(e) => {
-                          if (e.target.value.length <= 80) {
-                            setTempBio(e.target.value);
-                          }
-                        }}
-                        onBlur={handleBioSave}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault();
-                            handleBioSave();
-                          }
-                          if (e.key === "Escape") {
-                            setTempBio(bio);
-                            setIsEditingBio(false);
-                          }
-                        }}
-                        placeholder="소개글을 입력해주세요 (최대 80자)"
-                        className="flex min-h-[80px] w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm font-semibold text-zinc-700 placeholder:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
-                      />
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          onClick={() => {
-                            setTempBio(bio);
-                            setIsEditingBio(false);
-                          }}
-                          className="h-9 px-4 text-zinc-500 font-bold rounded-lg hover:bg-zinc-100"
-                        >
-                          취소
-                        </Button>
-                        <Button onClick={handleBioSave} className="h-9 px-4 bg-zinc-900 text-white hover:bg-zinc-800 font-bold rounded-lg">
-                          저장
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div
-                      onClick={() => {
-                        setTempBio(bio);
-                        setIsEditingBio(true);
-                      }}
-                      className="group flex items-start justify-between min-h-[72px] p-4 rounded-xl bg-zinc-50 hover:bg-zinc-100/80 border border-zinc-200/50 cursor-pointer transition-colors"
-                    >
-                      <span className="font-semibold text-zinc-700 text-sm leading-relaxed whitespace-pre-wrap">{bio}</span>
-                      <IconEdit className="w-4 h-4 text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2 mt-0.5" />
-                    </div>
-                  )}
-                </div>
+                <h1 className="text-2xl sm:text-3xl font-black text-zinc-900 tracking-tight mb-4 leading-tight">
+                  나만의 마이페이지를<br />시작해보세요
+                </h1>
+                <p className="text-sm font-semibold text-zinc-500 leading-relaxed mb-8 max-w-[280px]">
+                  Google로 로그인하여 소셜 미디어, 포트폴리오, 외부 링크들을 한곳에 깔끔하게 모으고 실시간으로 관리하세요.
+                </p>
+                <Button
+                  onClick={handleLogin}
+                  className="w-full h-13 gap-3 rounded-2xl bg-zinc-950 hover:bg-zinc-800 text-white font-black transition-all shadow-xl shadow-zinc-950/10 active:scale-[0.98] cursor-pointer text-base"
+                >
+                  <IconBrandGoogle className="w-5 h-5" />
+                  <span>Google로 로그인</span>
+                </Button>
               </div>
             </Card>
-
-            {/* Links Management Area */}
-            <div className="flex flex-col gap-4">
-              <div className="flex justify-between items-center">
-                <h2 className="text-sm font-black uppercase tracking-wider text-zinc-400">링크 관리</h2>
-                
-                {/* Add Link Dialog */}
-                <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
-                  <DialogTrigger className="inline-flex items-center justify-center h-10 px-4 gap-2 font-black text-sm rounded-xl bg-primary text-primary-foreground hover:opacity-90 shadow-lg shadow-primary/10 transition-all active:scale-95 cursor-pointer">
-                    <IconPlus className="w-4 h-4" />
-                    새 링크 추가
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[425px] bg-white border-zinc-200 text-zinc-900 rounded-3xl shadow-2xl p-0 overflow-hidden">
-                    <form onSubmit={handleSubmit(onSubmit)}>
-                      <DialogHeader className="p-8 pb-4">
-                        <DialogTitle className="text-2xl font-black text-zinc-900">새 링크 추가</DialogTitle>
-                        <DialogDescription className="text-zinc-500 font-medium mt-1">
-                          프로필에 표시할 링크 정보를 입력해 주세요. URL 입력 시 주소창 형식을 입력하시면 자동으로 검증 처리됩니다.
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="grid gap-6 p-8 py-4">
-                        <div className="grid gap-2">
-                          <Label htmlFor="title" className="text-xs font-black uppercase tracking-widest text-zinc-400 ml-1">
-                            링크 제목
-                          </Label>
-                          <Input
-                            id="title"
-                            placeholder="예: 내 포트폴리오, Instagram"
-                            {...register("title")}
-                            disabled={isSubmitting || isAdding}
-                            className={`h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-zinc-900 text-base font-bold ${errors.title ? "border-red-500 focus-visible:ring-red-500" : ""}`}
-                          />
-                          {errors.title && <p className="text-xs font-bold text-red-500 ml-1">{errors.title.message}</p>}
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="url" className="text-xs font-black uppercase tracking-widest text-zinc-400 ml-1">
-                            링크 주소
-                          </Label>
-                          <Input
-                            id="url"
-                            placeholder="예: github.com/username 또는 https://..."
-                            {...register("url")}
-                            disabled={isSubmitting || isAdding}
-                            className={`h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-zinc-900 text-base font-bold ${errors.url ? "border-red-500 focus-visible:ring-red-500" : ""}`}
-                            dir="ltr"
-                          />
-                          {errors.url && <p className="text-xs font-bold text-red-500 ml-1">{errors.url.message}</p>}
-                        </div>
-                      </div>
-                      <DialogFooter className="p-8 pt-4 flex-col sm:flex-row gap-3">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          onClick={() => handleOpenChange(false)}
-                          disabled={isSubmitting || isAdding}
-                          className="h-13 px-6 hover:bg-zinc-100 text-zinc-500 font-bold rounded-2xl flex-1"
-                        >
-                          취소
-                        </Button>
-                        <Button
-                          type="submit"
-                          disabled={isSubmitting || isAdding}
-                          className="h-13 px-10 font-black rounded-2xl bg-primary hover:opacity-90 text-primary-foreground shadow-xl shadow-primary/20 transition-all active:scale-95 flex-1 flex items-center justify-center gap-2"
-                        >
-                          {isSubmitting || isAdding ? (
-                            <>
-                              <IconLoader2 className="animate-spin w-5 h-5" />
-                              <span>추가 중...</span>
-                            </>
-                          ) : (
-                            "추가"
-                          )}
-                        </Button>
-                      </DialogFooter>
-                    </form>
-                  </DialogContent>
-                </Dialog>
-              </div>
-
-              {/* Editable Link List */}
-              <div className="flex flex-col gap-3">
-                {isLoading ? (
-                  <div className="flex flex-col items-center justify-center py-16 px-4 rounded-2xl border border-dashed border-zinc-200 bg-white text-center">
-                    <IconLoader2 className="w-8 h-8 animate-spin text-zinc-400 mb-2" />
-                    <p className="text-sm font-bold text-zinc-400">링크를 불러오는 중입니다...</p>
-                  </div>
-                ) : links.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 px-4 rounded-2xl border border-dashed border-zinc-200 bg-white text-center">
-                    <span className="text-4xl mb-3">📁</span>
-                    <p className="text-sm font-bold text-zinc-400">아직 등록된 링크가 없습니다.</p>
-                  </div>
-                ) : (
-                  links.map((link) => (
-                    <LinkCard
-                      key={link.id}
-                      link={link}
-                      onUpdate={handleUpdateLink}
-                      onDeleteClick={setDeletingLink}
-                    />
-                  ))
-                )}
-              </div>
-            </div>
-          </section>
-
-          {/* RIGHT: Live Preview Pane (5 columns) */}
-          <section className="lg:col-span-5 flex flex-col items-center lg:sticky lg:top-10 py-6 lg:py-0">
-            <div className="flex items-center gap-2 mb-4 font-bold text-xs text-zinc-500">
-              <IconDeviceMobile className="w-4 h-4" />
-              <span>실시간 모바일 미리보기</span>
-            </div>
-
-            {/* SmartPhone Mockup Shell */}
-            <div className="relative w-full max-w-[340px] aspect-[9/19] rounded-[48px] border-[12px] border-zinc-950 bg-white shadow-2xl overflow-hidden flex flex-col z-10 ring-8 ring-zinc-200/50">
+          </div>
+        ) : (
+          /* 로그인 된 상태: 마이페이지 편집 패널 및 실시간 미리보기 */
+          <div className="relative max-w-6xl mx-auto z-10 w-full mt-4">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
               
-              {/* Phone Camera Notch */}
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-zinc-950 rounded-b-2xl z-30 flex items-center justify-center">
-                <div className="w-2.5 h-2.5 rounded-full bg-zinc-800" />
-              </div>
-
-              {/* Preview Content Inside */}
-              <div className="flex-1 flex flex-col overflow-y-auto px-5 py-12 bg-zinc-50/70 select-none ltr-content relative">
+              {/* LEFT: Editing Panel (7 columns) */}
+              <section className="lg:col-span-7 flex flex-col gap-6">
                 
-                {/* Soft ambient blur in mobile screen */}
-                <div className="absolute top-[-20%] left-[-20%] w-[80%] h-[80%] rounded-full bg-zinc-200/30 blur-[40px] pointer-events-none" />
-                <div className="absolute bottom-[-20%] right-[-20%] w-[80%] h-[80%] rounded-full bg-slate-200/30 blur-[40px] pointer-events-none" />
-                
-                {/* Header */}
-                <header className="mb-8 w-full flex flex-col items-center text-center mt-4 z-10">
-                  <div className="mb-4 inline-flex items-center justify-center rounded-full bg-white px-6 py-2 border border-zinc-200/80 shadow-sm">
-                    <h3 className="text-xl font-extrabold tracking-tight text-zinc-900 break-all">
-                      {displayName}
-                    </h3>
-                  </div>
-                  <p className="text-xs text-zinc-500 font-semibold leading-relaxed tracking-wide max-w-[220px] break-words">
-                    {bio}
-                  </p>
-                </header>
-
-                {/* Links list wrapper */}
-                <div className="w-full flex flex-col gap-2.5 z-10 flex-1">
-                  {links.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-10 px-4 rounded-xl border border-dashed border-zinc-200 bg-white/80 text-center my-auto">
-                      <span className="text-2xl mb-1">📁</span>
-                      <p className="text-[11px] font-bold text-zinc-400">아직 등록된 링크가 없습니다.</p>
-                    </div>
-                  ) : (
-                    links.map((link) => (
-                      <a
-                        key={link.id}
-                        href={link.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full outline-none group cursor-pointer"
-                      >
-                        <Card className="w-full bg-white border-zinc-100/80 shadow-sm hover:shadow-md hover:border-zinc-200 transition-all duration-200 rounded-xl overflow-hidden p-0">
-                          <CardContent className="p-3.5 flex items-center relative min-h-[56px] w-full">
-                            
-                            {/* Left Favicon Area */}
-                            {link.faviconUrl ? (
-                              <div className="absolute left-3 flex shrink-0 items-center justify-center w-8 h-8 rounded-lg bg-zinc-50 border border-zinc-100 shadow-sm group-hover:bg-white transition-colors">
-                                <img
-                                  src={link.faviconUrl}
-                                  alt={link.title}
-                                  className="w-4 h-4 object-contain"
-                                />
-                              </div>
-                            ) : (
-                              <div className="absolute left-3 flex shrink-0 items-center justify-center w-8 h-8 rounded-lg bg-zinc-50 border border-zinc-100" />
-                            )}
-                            
-                            {/* Center Text Area */}
-                            <div className="flex-1 text-center px-10">
-                              <span className="text-[13px] font-extrabold tracking-tight text-zinc-800 group-hover:text-zinc-950 transition-colors">
-                                {link.title}
-                              </span>
-                            </div>
-
-                            {/* Right Arrow */}
-                            <div className="absolute right-4 text-zinc-300 group-hover:text-zinc-400 group-hover:translate-x-0.5 transition-all">
-                              <IconArrowRight className="w-3.5 h-3.5 stroke-[3]" />
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </a>
-                    ))
-                  )}
-                </div>
-
-                {/* Footer branding logo */}
-                <footer className="mt-8 mb-2 shrink-0 z-10">
-                  <div className="flex items-center justify-center gap-1.5 opacity-30 hover:opacity-100 transition-opacity cursor-default">
-                    <span className="text-[8px] font-black tracking-[0.2em] uppercase text-zinc-900">
-                      Powered by MyLink
+                {/* Header & Title */}
+                <div className="flex flex-col gap-1 pb-4 border-b border-zinc-200/60">
+                  <div className="flex items-center gap-2.5">
+                    <h1 className="text-3xl font-black tracking-tight text-zinc-900">마이페이지 관리</h1>
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-zinc-900 text-white text-[9px] font-black uppercase tracking-widest shadow-sm">
+                      <IconLock className="w-3 h-3 text-emerald-400" />
+                      Admin
                     </span>
                   </div>
-                </footer>
-              </div>
-            </div>
-          </section>
+                  <p className="text-sm font-semibold text-zinc-500">프로필 정보와 링크들을 실시간으로 편집 관리하세요.</p>
+                </div>
 
-        </div>
-      </div>
+                {/* Profile Info Setup Card */}
+                <Card className="bg-white border-zinc-200/60 shadow-sm rounded-2xl overflow-hidden p-6">
+                  <h2 className="text-sm font-black uppercase tracking-wider text-zinc-400 mb-6">프로필 설정</h2>
+                  
+                  <div className="flex flex-col gap-5">
+                    {/* Nickname (displayName) */}
+                    <div className="flex flex-col gap-2">
+                      <Label className="text-xs font-bold text-zinc-500">닉네임</Label>
+                      {isEditingName ? (
+                        <div className="flex gap-2">
+                          <Input
+                            ref={nameInputRef}
+                            value={tempName}
+                            onChange={(e) => setTempName(e.target.value)}
+                            onBlur={handleNameSave}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleNameSave();
+                              if (e.key === "Escape") {
+                                setTempName(displayName);
+                                setIsEditingName(false);
+                              }
+                            }}
+                            className="h-11 rounded-xl bg-zinc-50 border-zinc-200 font-bold focus-visible:ring-zinc-900"
+                          />
+                          <Button onClick={handleNameSave} size="icon" className="h-11 w-11 rounded-xl bg-zinc-900 text-white hover:bg-zinc-800 shrink-0">
+                            <IconCheck className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div
+                          onClick={() => {
+                            setTempName(displayName);
+                            setIsEditingName(true);
+                          }}
+                          className="group flex items-center justify-between h-11 px-4 rounded-xl bg-zinc-50 hover:bg-zinc-100/80 border border-zinc-200/50 cursor-pointer transition-colors"
+                        >
+                          <span className="font-bold text-zinc-900">{displayName}</span>
+                          <IconEdit className="w-4 h-4 text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Bio (Introduction) */}
+                    <div className="flex flex-col gap-2">
+                      <div className="flex justify-between items-center">
+                        <Label className="text-xs font-bold text-zinc-500">소개글</Label>
+                        <span className="text-[10px] font-bold text-zinc-400">
+                          {isEditingBio ? tempBio.length : bio.length}/80자
+                        </span>
+                      </div>
+                      {isEditingBio ? (
+                        <div className="flex flex-col gap-2">
+                          <textarea
+                            ref={bioTextareaRef}
+                            value={tempBio}
+                            onChange={(e) => {
+                              if (e.target.value.length <= 80) {
+                                setTempBio(e.target.value);
+                              }
+                            }}
+                            onBlur={handleBioSave}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                handleBioSave();
+                              }
+                              if (e.key === "Escape") {
+                                setTempBio(bio);
+                                setIsEditingBio(false);
+                              }
+                            }}
+                            placeholder="소개글을 입력해주세요 (최대 80자)"
+                            className="flex min-h-[80px] w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm font-semibold text-zinc-700 placeholder:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+                          />
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              onClick={() => {
+                                setTempBio(bio);
+                                setIsEditingBio(false);
+                              }}
+                              className="h-9 px-4 text-zinc-500 font-bold rounded-lg hover:bg-zinc-100"
+                            >
+                              취소
+                            </Button>
+                            <Button onClick={handleBioSave} className="h-9 px-4 bg-zinc-900 text-white hover:bg-zinc-800 font-bold rounded-lg">
+                              저장
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div
+                          onClick={() => {
+                            setTempBio(bio);
+                            setIsEditingBio(true);
+                          }}
+                          className="group flex items-start justify-between min-h-[72px] p-4 rounded-xl bg-zinc-50 hover:bg-zinc-100/80 border border-zinc-200/50 cursor-pointer transition-colors"
+                        >
+                          <span className="font-semibold text-zinc-700 text-sm leading-relaxed whitespace-pre-wrap">{bio}</span>
+                          <IconEdit className="w-4 h-4 text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2 mt-0.5" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+
+                {/* Links Management Area */}
+                <div className="flex flex-col gap-4">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-sm font-black uppercase tracking-wider text-zinc-400">링크 관리</h2>
+                    
+                    {/* Add Link Dialog */}
+                    <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
+                      <DialogTrigger className="inline-flex items-center justify-center h-10 px-4 gap-2 font-black text-sm rounded-xl bg-primary text-primary-foreground hover:opacity-90 shadow-lg shadow-primary/10 transition-all active:scale-95 cursor-pointer border border-transparent">
+                        <IconPlus className="w-4 h-4" />
+                        새 링크 추가
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-[425px] bg-white border-zinc-200 text-zinc-900 rounded-3xl shadow-2xl p-0 overflow-hidden">
+                        <form onSubmit={handleSubmit(onSubmit)}>
+                          <DialogHeader className="p-8 pb-4">
+                            <DialogTitle className="text-2xl font-black text-zinc-900">새 링크 추가</DialogTitle>
+                            <DialogDescription className="text-zinc-500 font-medium mt-1">
+                              프로필에 표시할 링크 정보를 입력해 주세요. URL 입력 시 주소창 형식을 입력하시면 자동으로 검증 처리됩니다.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="grid gap-6 p-8 py-4">
+                            <div className="grid gap-2">
+                              <Label htmlFor="title" className="text-xs font-black uppercase tracking-widest text-zinc-400 ml-1">
+                                링크 제목
+                              </Label>
+                              <Input
+                                id="title"
+                                placeholder="예: 내 포트폴리오, Instagram"
+                                {...register("title")}
+                                disabled={isSubmitting || isAdding}
+                                className={`h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-zinc-900 text-base font-bold ${errors.title ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+                              />
+                              {errors.title && <p className="text-xs font-bold text-red-500 ml-1">{errors.title.message}</p>}
+                            </div>
+                            <div className="grid gap-2">
+                              <Label htmlFor="url" className="text-xs font-black uppercase tracking-widest text-zinc-400 ml-1">
+                                링크 주소
+                              </Label>
+                              <Input
+                                id="url"
+                                placeholder="예: github.com/username 또는 https://..."
+                                {...register("url")}
+                                disabled={isSubmitting || isAdding}
+                                className={`h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-zinc-900 text-base font-bold ${errors.url ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+                                dir="ltr"
+                              />
+                              {errors.url && <p className="text-xs font-bold text-red-500 ml-1">{errors.url.message}</p>}
+                            </div>
+                          </div>
+                          <DialogFooter className="p-8 pt-4 flex-col sm:flex-row gap-3">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={() => handleOpenChange(false)}
+                              disabled={isSubmitting || isAdding}
+                              className="h-13 px-6 hover:bg-zinc-100 text-zinc-500 font-bold rounded-2xl flex-1"
+                            >
+                              취소
+                            </Button>
+                            <Button
+                              type="submit"
+                              disabled={isSubmitting || isAdding}
+                              className="h-13 px-10 font-black rounded-2xl bg-primary hover:opacity-90 text-primary-foreground shadow-xl shadow-primary/20 transition-all active:scale-95 flex-1 flex items-center justify-center gap-2"
+                            >
+                              {isSubmitting || isAdding ? (
+                                <>
+                                  <IconLoader2 className="animate-spin w-5 h-5" />
+                                  <span>추가 중...</span>
+                                </>
+                              ) : (
+                                "추가"
+                              )}
+                            </Button>
+                          </DialogFooter>
+                        </form>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+
+                  {/* Editable Link List */}
+                  <div className="flex flex-col gap-3">
+                    {isLoading ? (
+                      <div className="flex flex-col items-center justify-center py-16 px-4 rounded-2xl border border-dashed border-zinc-200 bg-white text-center">
+                        <IconLoader2 className="w-8 h-8 animate-spin text-zinc-400 mb-2" />
+                        <p className="text-sm font-bold text-zinc-400">링크를 불러오는 중입니다...</p>
+                      </div>
+                    ) : links.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-16 px-4 rounded-2xl border border-dashed border-zinc-200 bg-white text-center">
+                        <span className="text-4xl mb-3">📁</span>
+                        <p className="text-sm font-bold text-zinc-400">아직 등록된 링크가 없습니다.</p>
+                      </div>
+                    ) : (
+                      links.map((link) => (
+                        <LinkCard
+                          key={link.id}
+                          link={link}
+                          onUpdate={handleUpdateLink}
+                          onDeleteClick={setDeletingLink}
+                        />
+                      ))
+                    )}
+                  </div>
+                </div>
+              </section>
+
+              {/* RIGHT: Live Preview Pane (5 columns) */}
+              <section className="lg:col-span-5 flex flex-col items-center lg:sticky lg:top-20 py-6 lg:py-0">
+                <div className="flex items-center gap-2 mb-4 font-bold text-xs text-zinc-500">
+                  <IconDeviceMobile className="w-4 h-4" />
+                  <span>실시간 모바일 미리보기</span>
+                </div>
+
+                {/* SmartPhone Mockup Shell */}
+                <div className="relative w-full max-w-[340px] aspect-[9/19] rounded-[48px] border-[12px] border-zinc-950 bg-white shadow-2xl overflow-hidden flex flex-col z-10 ring-8 ring-zinc-200/50">
+                  
+                  {/* Phone Camera Notch */}
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-zinc-950 rounded-b-2xl z-30 flex items-center justify-center">
+                    <div className="w-2.5 h-2.5 rounded-full bg-zinc-800" />
+                  </div>
+
+                  {/* Preview Content Inside */}
+                  <div className="flex-1 flex flex-col overflow-y-auto px-5 py-12 bg-zinc-50/70 select-none ltr-content relative">
+                    
+                    {/* Soft ambient blur in mobile screen */}
+                    <div className="absolute top-[-20%] left-[-20%] w-[80%] h-[80%] rounded-full bg-zinc-200/30 blur-[40px] pointer-events-none" />
+                    <div className="absolute bottom-[-20%] right-[-20%] w-[80%] h-[80%] rounded-full bg-slate-200/30 blur-[40px] pointer-events-none" />
+                    
+                    {/* Header */}
+                    <header className="mb-8 w-full flex flex-col items-center text-center mt-4 z-10">
+                      <div className="mb-4 inline-flex items-center justify-center rounded-full bg-white px-6 py-2 border border-zinc-200/80 shadow-sm">
+                        <h3 className="text-xl font-extrabold tracking-tight text-zinc-900 break-all">
+                          {displayName}
+                        </h3>
+                      </div>
+                      <p className="text-xs text-zinc-500 font-semibold leading-relaxed tracking-wide max-w-[220px] break-words">
+                        {bio}
+                      </p>
+                    </header>
+
+                    {/* Links list wrapper */}
+                    <div className="w-full flex flex-col gap-2.5 z-10 flex-1">
+                      {links.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-10 px-4 rounded-xl border border-dashed border-zinc-200 bg-white/80 text-center my-auto">
+                          <span className="text-2xl mb-1">📁</span>
+                          <p className="text-[11px] font-bold text-zinc-400">아직 등록된 링크가 없습니다.</p>
+                        </div>
+                      ) : (
+                        links.map((link) => (
+                          <a
+                            key={link.id}
+                            href={link.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full outline-none group cursor-pointer"
+                          >
+                            <Card className="w-full bg-white border-zinc-100/80 shadow-sm hover:shadow-md hover:border-zinc-200 transition-all duration-200 rounded-xl overflow-hidden p-0">
+                              <CardContent className="p-3.5 flex items-center relative min-h-[56px] w-full">
+                                
+                                {/* Left Favicon Area */}
+                                {link.faviconUrl ? (
+                                  <div className="absolute left-3 flex shrink-0 items-center justify-center w-8 h-8 rounded-lg bg-zinc-50 border border-zinc-100 shadow-sm group-hover:bg-white transition-colors">
+                                    <img
+                                      src={link.faviconUrl}
+                                      alt={link.title}
+                                      className="w-4 h-4 object-contain"
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="absolute left-3 flex shrink-0 items-center justify-center w-8 h-8 rounded-lg bg-zinc-50 border border-zinc-100" />
+                                )}
+                                
+                                {/* Center Text Area */}
+                                <div className="flex-1 text-center px-10">
+                                  <span className="text-[13px] font-extrabold tracking-tight text-zinc-800 group-hover:text-zinc-950 transition-colors">
+                                    {link.title}
+                                  </span>
+                                </div>
+
+                                {/* Right Arrow */}
+                                <div className="absolute right-4 text-zinc-300 group-hover:text-zinc-400 group-hover:translate-x-0.5 transition-all">
+                                  <IconArrowRight className="w-3.5 h-3.5 stroke-[3]" />
+                                </div>
+                              </CardContent>
+                            </Card>
+                          </a>
+                        ))
+                      )}
+                    </div>
+
+                    {/* Footer branding logo */}
+                    <footer className="mt-8 mb-2 shrink-0 z-10">
+                      <div className="flex items-center justify-center gap-1.5 opacity-30 hover:opacity-100 transition-opacity cursor-default">
+                        <span className="text-[8px] font-black tracking-[0.2em] uppercase text-zinc-900">
+                          Powered by MyLink
+                        </span>
+                      </div>
+                    </footer>
+                  </div>
+                </div>
+              </section>
+
+            </div>
+          </div>
+        )}
+      </main>
 
       {/* 삭제 확인 모달 */}
       <Dialog open={!!deletingLink} onOpenChange={(open) => { if (!open && !isDeleting) setDeletingLink(null); }}>
@@ -592,6 +735,6 @@ export default function MyPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </main>
+    </div>
   );
 }

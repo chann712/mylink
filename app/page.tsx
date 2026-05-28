@@ -3,12 +3,30 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { db } from "@/lib/firebase";
-import { collection, addDoc, getDocs, query, orderBy, serverTimestamp, doc, deleteDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
+import {
+  signInWithPopup,
+  GoogleAuthProvider,
+  signOut,
+  onAuthStateChanged,
+  type User,
+} from "firebase/auth";
+import {
+  collection,
+  addDoc,
+  getDocs,
+  query,
+  orderBy,
+  serverTimestamp,
+  doc,
+  deleteDoc,
+  getDoc,
+  setDoc,
+} from "firebase/firestore";
 import { type Link } from "@/data/links";
 import { linkSchema, type LinkFormValues } from "@/lib/schemas";
 import LinkCard from "@/components/LinkCard";
-import { Card, CardContent } from "@/components/ui/card";
+import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -27,19 +45,84 @@ export default function Page() {
   const [links, setLinks] = useState<Link[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [deletingLink, setDeletingLink] = useState<Link | null>(null);
+  
+  // 로딩 및 제출 상태 관리
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
 
-  // Firestore에서 링크 목록 가져오기
+  // Auth 및 Firestore 연동 상태
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  // 프로필 정보 상태
+  const [displayName, setDisplayName] = useState("My Links");
+  const [bio, setBio] = useState("안녕하세요. 모든 작업물과 소셜 미디어를 한곳에서 확인하실 수 있습니다.");
+
+  // 구글 로그인 처리
+  const handleLogin = async () => {
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (err) {
+      console.error("Login failed:", err);
+    }
+  };
+
+  // 로그아웃 처리
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.error("Logout failed:", err);
+    }
+  };
+
+  // Auth 상태 및 데이터 구독
   useEffect(() => {
-    const fetchLinks = async () => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setAuthLoading(true);
+      setIsLoading(true);
+      
+      const targetUid = currentUser ? currentUser.uid : "anonymous";
+      setUser(currentUser);
+
       try {
-        setIsLoading(true);
-        const linksRef = collection(db, "users", "anonymous", "links");
+        // 1. users/{targetUid} 도큐먼트 조회
+        let currentDisplayName = "My Links";
+        let currentBio = "안녕하세요. 모든 작업물과 소셜 미디어를 한곳에서 확인하실 수 있습니다.";
+
+        if (currentUser) {
+          const userDocRef = doc(db, "users", currentUser.uid);
+          const userDocSnap = await getDoc(userDocRef);
+
+          if (userDocSnap.exists()) {
+            const userData = userDocSnap.data();
+            currentDisplayName = userData.displayName || currentUser.displayName || currentUser.email?.split("@")[0] || "My Links";
+            currentBio = userData.bio !== undefined ? userData.bio : currentBio;
+          } else {
+            // 최초 로그인 시 가입 처리 (구글 메일 앞부분 추출하여 displayName 설정)
+            const emailPrefix = currentUser.email?.split("@")[0] || "user";
+            currentDisplayName = emailPrefix;
+
+            await setDoc(userDocRef, {
+              email: currentUser.email,
+              displayName: currentDisplayName,
+              bio: currentBio,
+              createdAt: serverTimestamp(),
+            });
+          }
+        }
+
+        setDisplayName(currentDisplayName);
+        setBio(currentBio);
+
+        // 2. targetUid의 links 서브컬렉션 로드
+        const linksRef = collection(db, "users", targetUid, "links");
         const q = query(linksRef, orderBy("createdAt", "desc"));
         const querySnapshot = await getDocs(q);
         const fetchedLinks: Link[] = [];
+
         querySnapshot.forEach((doc) => {
           const data = doc.data();
           let faviconUrl = "";
@@ -60,13 +143,14 @@ export default function Page() {
         });
         setLinks(fetchedLinks);
       } catch (err) {
-        console.error("Failed to fetch links:", err);
+        console.error("Error loading user data or links:", err);
       } finally {
         setIsLoading(false);
+        setAuthLoading(false);
       }
-    };
+    });
 
-    fetchLinks();
+    return () => unsubscribe();
   }, []);
 
   const {
@@ -98,7 +182,8 @@ export default function Page() {
       const domain = urlObj.hostname;
       const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
 
-      const linksRef = collection(db, "users", "anonymous", "links");
+      const targetUid = user ? user.uid : "anonymous";
+      const linksRef = collection(db, "users", targetUid, "links");
       const docRef = await addDoc(linksRef, {
         title: data.title.trim(),
         url: data.url,
@@ -131,7 +216,8 @@ export default function Page() {
     if (!deletingLink) return;
     try {
       setIsDeleting(true);
-      const docRef = doc(db, "users", "anonymous", "links", deletingLink.id);
+      const targetUid = user ? user.uid : "anonymous";
+      const docRef = doc(db, "users", targetUid, "links", deletingLink.id);
       await deleteDoc(docRef);
       setLinks((prev) => prev.filter((l) => l.id !== deletingLink.id));
       setDeletingLink(null);
@@ -143,133 +229,150 @@ export default function Page() {
   };
 
   return (
-    <main className="relative flex min-h-svh flex-col items-center justify-center overflow-hidden bg-zinc-50 px-4 py-8 selection:bg-zinc-200 text-zinc-900 font-sans">
-      {/* Background ambient lighting (Soft Gradient effect for light theme) */}
-      <div className="fixed top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-zinc-200/40 blur-[100px] pointer-events-none" />
-      <div className="fixed bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] rounded-full bg-slate-200/40 blur-[100px] pointer-events-none" />
-      
-      <div className="relative w-full max-w-[480px] flex flex-col items-center z-10 my-auto">
-        {/* Profile Header */}
-        <header className="mb-10 w-full flex flex-col items-center text-center">
-          <div className="mb-5 inline-flex items-center justify-center rounded-full bg-white px-8 py-3 border border-zinc-200 shadow-sm focus-within:shadow-md transition-shadow">
-            <h1 className="text-3xl font-extrabold tracking-tight text-zinc-900">
-              My Links
-            </h1>
-          </div>
-          <p className="text-sm text-zinc-500 font-medium tracking-wide max-w-[280px] leading-relaxed">
-             안녕하세요. 모든 작업물과 소셜 미디어를 한곳에서 확인하실 수 있습니다.
-          </p>
-        </header>
+    <div className="min-h-svh bg-zinc-50/50 flex flex-col">
+      <Header
+        user={user}
+        displayName={displayName}
+        onLogin={handleLogin}
+        onLogout={handleLogout}
+        isLoading={authLoading}
+      />
 
-        {/* Action Area: Add Link Button */}
-        <section className="w-full mb-6 relative">
-          <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
-            <DialogTrigger className="w-full group flex items-center justify-center gap-3 py-4 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-95 transition-all duration-300 outline-none cursor-pointer border border-transparent">
-              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white text-primary group-hover:scale-110 transition-transform duration-300">
-                <IconPlus className="w-4 h-4" />
+      <main className="relative flex-1 flex flex-col items-center justify-center overflow-hidden px-4 py-8 selection:bg-zinc-200 text-zinc-900 font-sans">
+        {/* Background ambient lighting (Soft Gradient effect for light theme) */}
+        <div className="fixed top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-zinc-200/40 blur-[100px] pointer-events-none" />
+        <div className="fixed bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] rounded-full bg-slate-200/40 blur-[100px] pointer-events-none" />
+        
+        {authLoading ? (
+          <div className="flex flex-col items-center justify-center py-12">
+            <IconLoader2 className="w-8 h-8 animate-spin text-zinc-400 mb-2" />
+            <p className="text-sm font-bold text-zinc-400">사용자 정보를 불러오는 중...</p>
+          </div>
+        ) : (
+          <div className="relative w-full max-w-[480px] flex flex-col items-center z-10 my-auto">
+            {/* Profile Header */}
+            <header className="mb-10 w-full flex flex-col items-center text-center">
+              <div className="mb-5 inline-flex items-center justify-center rounded-full bg-white px-8 py-3 border border-zinc-200 shadow-sm focus-within:shadow-md transition-shadow">
+                <h1 className="text-3xl font-extrabold tracking-tight text-zinc-900">
+                  {displayName}
+                </h1>
               </div>
-              <span className="font-bold text-primary-foreground tracking-tight">새 링크 추가</span>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px] bg-white border-zinc-200 text-zinc-900 rounded-3xl shadow-2xl p-0 overflow-hidden">
-              <form onSubmit={handleSubmit(onSubmit)}>
-                <DialogHeader className="p-8 pb-4">
-                  <DialogTitle className="text-2xl font-black text-zinc-900">새 링크 추가</DialogTitle>
-                  <DialogDescription className="text-zinc-500 font-medium mt-1">
-                    프로필에 표시할 링크 정보를 입력해 주세요. URL 입력 시 자동으로 형식이 검증됩니다.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-6 p-8 py-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="title" className="text-xs font-black uppercase tracking-widest text-zinc-400 ml-1">
-                      링크 제목
-                    </Label>
-                    <Input
-                      id="title"
-                      placeholder="예: 내 블로그, Instagram"
-                      {...register("title")}
-                      disabled={isSubmitting || isAdding}
-                      className={`h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-zinc-900 text-base font-bold ${errors.title ? "border-red-500 focus-visible:ring-red-500" : ""}`}
-                    />
-                    {errors.title && <p className="text-xs font-bold text-red-500 ml-1">{errors.title.message}</p>}
+              <p className="text-sm text-zinc-500 font-medium tracking-wide max-w-[280px] leading-relaxed">
+                {bio}
+              </p>
+            </header>
+
+            {/* Action Area: Add Link Button */}
+            <section className="w-full mb-6 relative">
+              <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
+                <DialogTrigger className="w-full group flex items-center justify-center gap-3 py-4 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-95 transition-all duration-300 outline-none cursor-pointer border border-transparent">
+                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white text-primary group-hover:scale-110 transition-transform duration-300">
+                    <IconPlus className="w-4 h-4" />
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="url" className="text-xs font-black uppercase tracking-widest text-zinc-400 ml-1">
-                      링크 주소
-                    </Label>
-                    <Input
-                      id="url"
-                      placeholder="예: github.com/username 또는 https://..."
-                      {...register("url")}
-                      disabled={isSubmitting || isAdding}
-                      className={`h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-zinc-900 text-base font-bold ${errors.url ? "border-red-500 focus-visible:ring-red-500" : ""}`}
-                      dir="ltr"
-                    />
-                    {errors.url && <p className="text-xs font-bold text-red-500 ml-1">{errors.url.message}</p>}
-                  </div>
+                  <span className="font-bold text-primary-foreground tracking-tight">새 링크 추가</span>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[425px] bg-white border-zinc-200 text-zinc-900 rounded-3xl shadow-2xl p-0 overflow-hidden">
+                  <form onSubmit={handleSubmit(onSubmit)}>
+                    <DialogHeader className="p-8 pb-4">
+                      <DialogTitle className="text-2xl font-black text-zinc-900">새 링크 추가</DialogTitle>
+                      <DialogDescription className="text-zinc-500 font-medium mt-1">
+                        프로필에 표시할 링크 정보를 입력해 주세요. URL 입력 시 자동으로 형식이 검증됩니다.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-6 p-8 py-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="title" className="text-xs font-black uppercase tracking-widest text-zinc-400 ml-1">
+                          링크 제목
+                        </Label>
+                        <Input
+                          id="title"
+                          placeholder="예: 내 블로그, Instagram"
+                          {...register("title")}
+                          disabled={isSubmitting || isAdding}
+                          className={`h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-zinc-900 text-base font-bold ${errors.title ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+                        />
+                        {errors.title && <p className="text-xs font-bold text-red-500 ml-1">{errors.title.message}</p>}
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="url" className="text-xs font-black uppercase tracking-widest text-zinc-400 ml-1">
+                          링크 주소
+                        </Label>
+                        <Input
+                          id="url"
+                          placeholder="예: github.com/username 또는 https://..."
+                          {...register("url")}
+                          disabled={isSubmitting || isAdding}
+                          className={`h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-zinc-900 text-base font-bold ${errors.url ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+                          dir="ltr"
+                        />
+                        {errors.url && <p className="text-xs font-bold text-red-500 ml-1">{errors.url.message}</p>}
+                      </div>
+                    </div>
+                    <DialogFooter className="p-8 pt-4 flex-col sm:flex-row gap-3">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => handleOpenChange(false)}
+                        disabled={isSubmitting || isAdding}
+                        className="h-13 px-6 hover:bg-zinc-100 text-zinc-500 font-bold rounded-2xl flex-1"
+                      >
+                        취소
+                      </Button>
+                      <Button
+                        type="submit"
+                        disabled={isSubmitting || isAdding}
+                        className="h-13 px-10 font-black rounded-2xl bg-primary hover:opacity-90 text-primary-foreground shadow-xl shadow-primary/20 transition-all active:scale-95 flex-1 flex items-center justify-center gap-2"
+                      >
+                        {isSubmitting || isAdding ? (
+                          <>
+                            <IconLoader2 className="animate-spin w-5 h-5" />
+                            <span>추가 중...</span>
+                          </>
+                        ) : (
+                          "추가"
+                        )}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </section>
+
+            {/* Link List */}
+            <section className="w-full flex flex-col gap-3">
+              {isLoading ? (
+                <div className="flex flex-col items-center justify-center py-12 px-4 rounded-2xl border border-dashed border-zinc-200 bg-white/80 shadow-sm text-center backdrop-blur-sm">
+                  <IconLoader2 className="w-8 h-8 animate-spin text-zinc-400 mb-2" />
+                  <p className="text-sm font-bold text-zinc-400">링크를 불러오는 중입니다...</p>
                 </div>
-                <DialogFooter className="p-8 pt-4 flex-col sm:flex-row gap-3">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => handleOpenChange(false)}
-                    disabled={isSubmitting || isAdding}
-                    className="h-13 px-6 hover:bg-zinc-100 text-zinc-500 font-bold rounded-2xl flex-1"
-                  >
-                    취소
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={isSubmitting || isAdding}
-                    className="h-13 px-10 font-black rounded-2xl bg-primary hover:opacity-90 text-primary-foreground shadow-xl shadow-primary/20 transition-all active:scale-95 flex-1 flex items-center justify-center gap-2"
-                  >
-                    {isSubmitting || isAdding ? (
-                      <>
-                        <IconLoader2 className="animate-spin w-5 h-5" />
-                        <span>추가 중...</span>
-                      </>
-                    ) : (
-                      "추가"
-                    )}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </section>
+              ) : links.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 px-4 rounded-2xl border border-dashed border-zinc-200 bg-white/80 shadow-sm text-center backdrop-blur-sm">
+                  <span className="text-3xl mb-2">📁</span>
+                  <p className="text-sm font-bold text-zinc-400">아직 등록된 링크가 없습니다.</p>
+                </div>
+              ) : (
+                links.map((link) => (
+                  <LinkCard
+                    key={link.id}
+                    link={link}
+                    onUpdate={handleUpdateLink}
+                    onDeleteClick={setDeletingLink}
+                  />
+                ))
+              )}
+            </section>
 
-        {/* Link List */}
-        <section className="w-full flex flex-col gap-3">
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center py-12 px-4 rounded-2xl border border-dashed border-zinc-200 bg-white/80 shadow-sm text-center backdrop-blur-sm">
-              <IconLoader2 className="w-8 h-8 animate-spin text-zinc-400 mb-2" />
-              <p className="text-sm font-bold text-zinc-400">링크를 불러오는 중입니다...</p>
-            </div>
-          ) : links.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 px-4 rounded-2xl border border-dashed border-zinc-200 bg-white/80 shadow-sm text-center backdrop-blur-sm">
-              <span className="text-3xl mb-2">📁</span>
-              <p className="text-sm font-bold text-zinc-400">아직 등록된 링크가 없습니다.</p>
-            </div>
-          ) : (
-            links.map((link) => (
-              <LinkCard
-                key={link.id}
-                link={link}
-                onUpdate={handleUpdateLink}
-                onDeleteClick={setDeletingLink}
-              />
-            ))
-          )}
-        </section>
-
-        {/* Footer Branding */}
-        <footer className="mt-14 mb-4">
-          <div className="flex items-center justify-center gap-2 opacity-30 hover:opacity-100 transition-all duration-500 cursor-default">
-            <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-zinc-900">
-              Powered by MyLink
-            </span>
+            {/* Footer Branding */}
+            <footer className="mt-14 mb-4">
+              <div className="flex items-center justify-center gap-2 opacity-30 hover:opacity-100 transition-all duration-500 cursor-default">
+                <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-zinc-900">
+                  Powered by MyLink
+                </span>
+              </div>
+            </footer>
           </div>
-        </footer>
-      </div>
+        )}
+      </main>
 
       {/* 삭제 확인 모달 */}
       <Dialog open={!!deletingLink} onOpenChange={(open) => { if (!open && !isDeleting) setDeletingLink(null); }}>
@@ -322,6 +425,6 @@ export default function Page() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </main>
+    </div>
   );
 }

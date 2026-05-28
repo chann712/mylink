@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { linkSchema, type LinkFormValues } from "@/lib/schemas";
 import { type Link } from "@/data/links";
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -42,8 +42,9 @@ export default function LinkCard({ link, onUpdate, onDeleteClick }: LinkCardProp
       const domain = urlObj.hostname;
       const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
 
-      // Firebase Firestore의 문서 업데이트
-      const docRef = doc(db, "users", "anonymous", "links", link.id);
+      // Firebase Firestore의 문서 업데이트 (로그인 사용자 UID 적용)
+      const userId = auth.currentUser?.uid || "anonymous";
+      const docRef = doc(db, "users", userId, "links", link.id);
       await updateDoc(docRef, {
         title: data.title.trim(),
         url: data.url,

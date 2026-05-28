@@ -182,7 +182,7 @@ export default function Page() {
                   </Button>
                   <Button
                     type="submit"
-                    className="h-11 px-8 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl shadow-lg shadow-zinc-200 transition-all active:scale-95"
+                    className="h-11 px-8 bg-primary hover:opacity-90 text-primary-foreground font-bold rounded-xl shadow-lg shadow-primary/20 transition-all active:scale-95"
                   >
                     추가하기
                   </Button>

@@ -29,6 +29,7 @@ export default function Page() {
   const [deletingLink, setDeletingLink] = useState<Link | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
 
   // Firestore에서 링크 목록 가져오기
   useEffect(() => {
@@ -83,7 +84,7 @@ export default function Page() {
   });
 
   const handleOpenChange = (open: boolean) => {
-    if (isSubmitting) return; // 제출 중에는 다이얼로그 닫기 방지
+    if (isSubmitting || isAdding) return; // 제출 중에는 다이얼로그 닫기 방지
     setIsDialogOpen(open);
     if (!open) {
       reset();
@@ -92,6 +93,7 @@ export default function Page() {
 
   const onSubmit = async (data: LinkFormValues) => {
     try {
+      setIsAdding(true);
       const urlObj = new URL(data.url);
       const domain = urlObj.hostname;
       const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
@@ -116,6 +118,8 @@ export default function Page() {
       handleOpenChange(false);
     } catch (err) {
       console.error("Link add error", err);
+    } finally {
+      setIsAdding(false);
     }
   };
 
@@ -183,7 +187,7 @@ export default function Page() {
                       id="title"
                       placeholder="예: 내 블로그, Instagram"
                       {...register("title")}
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || isAdding}
                       className={`h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-zinc-900 text-base font-bold ${errors.title ? "border-red-500 focus-visible:ring-red-500" : ""}`}
                     />
                     {errors.title && <p className="text-xs font-bold text-red-500 ml-1">{errors.title.message}</p>}
@@ -196,7 +200,7 @@ export default function Page() {
                       id="url"
                       placeholder="예: github.com/username 또는 https://..."
                       {...register("url")}
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || isAdding}
                       className={`h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-zinc-900 text-base font-bold ${errors.url ? "border-red-500 focus-visible:ring-red-500" : ""}`}
                       dir="ltr"
                     />
@@ -208,17 +212,17 @@ export default function Page() {
                     type="button"
                     variant="ghost"
                     onClick={() => handleOpenChange(false)}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || isAdding}
                     className="h-13 px-6 hover:bg-zinc-100 text-zinc-500 font-bold rounded-2xl flex-1"
                   >
                     취소
                   </Button>
                   <Button
                     type="submit"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || isAdding}
                     className="h-13 px-10 font-black rounded-2xl bg-primary hover:opacity-90 text-primary-foreground shadow-xl shadow-primary/20 transition-all active:scale-95 flex-1 flex items-center justify-center gap-2"
                   >
-                    {isSubmitting ? (
+                    {isSubmitting || isAdding ? (
                       <>
                         <IconLoader2 className="animate-spin w-5 h-5" />
                         <span>추가 중...</span>

@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { db } from "@/lib/firebase";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { dummyLinks, type Link } from "@/data/links";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -127,14 +129,24 @@ export default function MyPage() {
   };
 
   // 신규 링크 추가
-  const onSubmit = (data: LinkFormValues) => {
+  const onSubmit = async (data: LinkFormValues) => {
     try {
       const urlObj = new URL(data.url);
       const domain = urlObj.hostname;
       const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
 
+      // Firestore에 데이터 저장
+      const linksRef = collection(db, "users", "anonymous", "links");
+      const docRef = await addDoc(linksRef, {
+        title: data.title.trim(),
+        url: data.url,
+        faviconUrl,
+        createdAt: serverTimestamp(),
+        updateAt: serverTimestamp(),
+      });
+
       const newLinkItem: Link = {
-        id: `link-admin-${Date.now()}`,
+        id: docRef.id,
         title: data.title.trim(),
         url: data.url,
         faviconUrl,
@@ -144,7 +156,7 @@ export default function MyPage() {
       setLinks((prev) => [newLinkItem, ...prev]);
       handleOpenChange(false);
     } catch (err) {
-      console.error("URL parsing error", err);
+      console.error("Link add error", err);
     }
   };
 

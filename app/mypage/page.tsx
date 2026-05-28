@@ -39,8 +39,13 @@ export default function MyPage() {
     e.preventDefault();
     setError("");
 
-    if (!newTitle.trim() || !newUrl.trim()) {
-      setError("제목과 주소를 모두 입력해주세요.");
+    if (!newTitle.trim()) {
+      alert("제목을 입력해주세요");
+      return;
+    }
+
+    if (!newUrl.trim()) {
+      alert("주소를 입력해주세요");
       return;
     }
 

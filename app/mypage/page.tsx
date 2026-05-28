@@ -135,12 +135,11 @@ export default function MyPage() {
       const domain = urlObj.hostname;
       const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
 
-      // Firestore에 데이터 저장
+      // Firestore에 데이터 저장 (요청에 따라 4개 필드만 저장)
       const linksRef = collection(db, "users", "anonymous", "links");
       const docRef = await addDoc(linksRef, {
         title: data.title.trim(),
         url: data.url,
-        faviconUrl,
         createdAt: serverTimestamp(),
         updateAt: serverTimestamp(),
       });

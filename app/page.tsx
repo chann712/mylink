@@ -3,10 +3,11 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
 import { db } from "@/lib/firebase";
-import { collection, addDoc, getDocs, query, orderBy, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, getDocs, query, orderBy, serverTimestamp, doc, deleteDoc } from "firebase/firestore";
 import { type Link } from "@/data/links";
+import { linkSchema, type LinkFormValues } from "@/lib/schemas";
+import LinkCard from "@/components/LinkCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -22,40 +23,10 @@ import {
 } from "@/components/ui/dialog";
 import { IconPlus } from "@tabler/icons-react";
 
-// Zod 스키마 정의 - url 입력 시 자동으로 https:// 를 접두어로 추가(transform)하고 유효성 검사 수행
-const linkSchema = z.object({
-  title: z.string().trim().min(1, "제목을 입력해주세요").max(50, "제목은 50자 이내로 입력해주세요"),
-  url: z
-    .string()
-    .min(1, "주소를 입력해주세요")
-    .transform((val) => {
-      let trimmed = val.trim();
-      if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
-        trimmed = "https://" + trimmed;
-      }
-      return trimmed;
-    })
-    .pipe(
-      z.string().url("올바른 URL 형식을 입력해주세요").refine(
-        (val) => {
-          try {
-            const urlObj = new URL(val);
-            // 최소한 도메인에 점(.)이 포함되어 있는지 확인하여 '아무거나' 입력을 방지
-            return urlObj.hostname.includes('.');
-          } catch {
-            return false;
-          }
-        },
-        { message: "올바른 URL 형식을 입력해주세요" }
-      )
-    ),
-});
-
-type LinkFormValues = z.infer<typeof linkSchema>;
-
 export default function Page() {
   const [links, setLinks] = useState<Link[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [deletingLink, setDeletingLink] = useState<Link | null>(null);
 
   // Firestore에서 링크 목록 가져오기
   useEffect(() => {
@@ -83,7 +54,6 @@ export default function Page() {
             createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
           });
         });
-        // Firestore 데이터만 목록에 세팅 (더미 데이터 제거)
         setLinks(fetchedLinks);
       } catch (err) {
         console.error("Failed to fetch links:", err);
@@ -97,7 +67,7 @@ export default function Page() {
     register,
     handleSubmit,
     reset,
-    formState: { errors, isValid },
+    formState: { errors },
   } = useForm<LinkFormValues>({
     resolver: zodResolver(linkSchema),
     mode: "onChange",
@@ -120,7 +90,6 @@ export default function Page() {
       const domain = urlObj.hostname;
       const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
 
-      // Firestore에 데이터 저장 (요청에 따라 title, url, createdAt, updateAt 4개 필드만 저장)
       const linksRef = collection(db, "users", "anonymous", "links");
       const docRef = await addDoc(linksRef, {
         title: data.title.trim(),
@@ -137,11 +106,26 @@ export default function Page() {
         createdAt: new Date().toISOString(),
       };
 
-      // 새로 추가된 링크를 리스트 최상단에 배치
       setLinks((prev) => [newLinkItem, ...prev]);
       handleOpenChange(false);
     } catch (err) {
       console.error("Link add error", err);
+    }
+  };
+
+  const handleUpdateLink = (updatedLink: Link) => {
+    setLinks((prev) => prev.map((l) => (l.id === updatedLink.id ? updatedLink : l)));
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deletingLink) return;
+    try {
+      const docRef = doc(db, "users", "anonymous", "links", deletingLink.id);
+      await deleteDoc(docRef);
+      setLinks((prev) => prev.filter((l) => l.id !== deletingLink.id));
+      setDeletingLink(null);
+    } catch (err) {
+      console.error("Failed to delete link:", err);
     }
   };
 
@@ -238,55 +222,12 @@ export default function Page() {
             </div>
           ) : (
             links.map((link) => (
-              <a
+              <LinkCard
                 key={link.id}
-                href={link.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full outline-none group"
-              >
-                <Card className="w-full bg-white border-zinc-100 shadow-sm hover:shadow-xl hover:shadow-zinc-200/50 hover:border-zinc-200 transition-all duration-300 ease-out hover:-translate-y-1 group-focus-visible:ring-2 ring-zinc-900 ring-offset-2 ring-offset-white overflow-hidden relative p-0 rounded-2xl">
-                  <CardContent className="p-4 flex items-center relative min-h-[72px] w-full">
-                    
-                    {/* Left Icon Area */}
-                    {link.faviconUrl ? (
-                      <div className="absolute left-4 flex shrink-0 items-center justify-center w-12 h-12 rounded-2xl bg-zinc-50 border border-zinc-100 shadow-sm group-hover:bg-white transition-all duration-300">
-                        <img
-                          src={link.faviconUrl}
-                          alt={`${link.title} 아이콘`}
-                          className="w-6 h-6 object-contain"
-                        />
-                      </div>
-                    ) : (
-                      <div className="absolute left-4 flex shrink-0 items-center justify-center w-12 h-12 rounded-2xl bg-zinc-50 border border-zinc-100" />
-                    )}
-                    
-                    {/* Center Text Area */}
-                    <div className="flex-1 text-center">
-                      <span className="text-[16px] font-bold tracking-tight text-zinc-800 group-hover:text-zinc-900 transition-colors duration-300">
-                        {link.title}
-                      </span>
-                    </div>
-
-                    {/* Right Arrow Area */}
-                    <div className="absolute right-6 opacity-0 group-hover:opacity-100 -translate-x-3 group-hover:translate-x-0 transition-all duration-300 text-zinc-400">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="3"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="m9 18 6-6-6-6" />
-                      </svg>
-                    </div>
-                  </CardContent>
-                </Card>
-              </a>
+                link={link}
+                onUpdate={handleUpdateLink}
+                onDeleteClick={setDeletingLink}
+              />
             ))
           )}
         </section>
@@ -300,6 +241,48 @@ export default function Page() {
           </div>
         </footer>
       </div>
+
+      {/* 삭제 확인 모달 */}
+      <Dialog open={!!deletingLink} onOpenChange={(open) => { if (!open) setDeletingLink(null); }}>
+        <DialogContent className="sm:max-w-[425px] bg-white border-zinc-200 text-zinc-900 rounded-3xl shadow-2xl p-0 overflow-hidden">
+          <DialogHeader className="p-8 pb-4">
+            <DialogTitle className="text-2xl font-black text-zinc-900">정말 삭제하시겠습니까?</DialogTitle>
+            <DialogDescription className="text-zinc-500 font-medium mt-1">
+              선택한 링크가 영구적으로 삭제됩니다.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-8 py-4 flex flex-col gap-3">
+            <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
+              <span className="text-xs font-black uppercase tracking-widest text-zinc-400 block mb-1">
+                링크 이름
+              </span>
+              <span className="text-base font-bold text-zinc-800">
+                {deletingLink?.title}
+              </span>
+            </div>
+            <p className="text-xs font-bold text-red-500 ml-1">
+              이 작업은 되돌릴 수 없습니다.
+            </p>
+          </div>
+          <DialogFooter className="p-8 pt-4 flex gap-3">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setDeletingLink(null)}
+              className="h-13 px-6 hover:bg-zinc-100 text-zinc-500 font-bold rounded-2xl flex-1"
+            >
+              취소
+            </Button>
+            <Button
+              type="button"
+              onClick={handleDeleteConfirm}
+              className="h-13 px-6 font-black rounded-2xl bg-red-600 hover:bg-red-700 text-white shadow-xl shadow-red-600/20 transition-all active:scale-95 flex-1"
+            >
+              삭제하기
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

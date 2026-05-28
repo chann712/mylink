@@ -52,13 +52,13 @@ function DialogContent({
   children,
   showCloseButton = true,
   ...props
-}: React.ComponentProps<typeof BaseDialog.Content> & {
+}: React.ComponentProps<typeof BaseDialog.Popup> & {
   showCloseButton?: boolean
 }) {
   return (
     <DialogPortal>
       <DialogOverlay />
-      <BaseDialog.Content
+      <BaseDialog.Popup
         data-slot="dialog-content"
         className={cn(
           "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-xl bg-popover p-6 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-md transition-all data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
@@ -68,18 +68,19 @@ function DialogContent({
       >
         {children}
         {showCloseButton && (
-          <BaseDialog.Close data-slot="dialog-close" asChild>
-            <Button
+          <BaseDialog.Close data-slot="dialog-close">
+             <Button
               variant="ghost"
               className="absolute top-4 right-4"
               size="icon-sm"
+              asChild={false}
             >
               <IconX />
               <span className="sr-only">Close</span>
             </Button>
           </BaseDialog.Close>
         )}
-      </BaseDialog.Content>
+      </BaseDialog.Popup>
     </DialogPortal>
   )
 }
@@ -113,7 +114,7 @@ function DialogFooter({
     >
       {children}
       {showCloseButton && (
-        <BaseDialog.Close asChild>
+        <BaseDialog.Close>
           <Button variant="outline">Close</Button>
         </BaseDialog.Close>
       )}

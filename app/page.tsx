@@ -111,7 +111,7 @@ export default function Page() {
         {/* Action Area: Add Link Button */}
         <section className="w-full mb-6 relative">
           <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
-            <DialogTrigger asChild>
+            <DialogTrigger>
               <button className="w-full group flex items-center justify-center gap-3 py-4 rounded-2xl bg-white border border-zinc-200 shadow-sm hover:shadow-md hover:border-zinc-300 hover:bg-zinc-50 transition-all duration-300 outline-none focus-visible:ring-2 ring-zinc-200">
                 <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground group-hover:scale-110 transition-transform duration-300">
                   <IconPlus className="w-4 h-4" />

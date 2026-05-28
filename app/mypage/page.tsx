@@ -3,10 +3,11 @@
 import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
 import { db } from "@/lib/firebase";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { dummyLinks, type Link } from "@/data/links";
+import { collection, addDoc, getDocs, query, orderBy, serverTimestamp, doc, deleteDoc } from "firebase/firestore";
+import { type Link } from "@/data/links";
+import { linkSchema, type LinkFormValues } from "@/lib/schemas";
+import LinkCard from "@/components/LinkCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -22,49 +23,23 @@ import {
 } from "@/components/ui/dialog";
 import {
   IconPlus,
-  IconTrash,
   IconLock,
   IconDeviceMobile,
   IconEdit,
-  IconExternalLink,
   IconCheck,
   IconArrowRight,
+  IconLoader2,
 } from "@tabler/icons-react";
 
-// Zod 스키마 정의 - url 입력 시 자동으로 https:// 를 접두어로 추가(transform)하고 유효성 검사 수행
-const linkSchema = z.object({
-  title: z.string().trim().min(1, "제목을 입력해주세요").max(50, "제목은 50자 이내로 입력해주세요"),
-  url: z
-    .string()
-    .min(1, "주소를 입력해주세요")
-    .transform((val) => {
-      let trimmed = val.trim();
-      if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
-        trimmed = "https://" + trimmed;
-      }
-      return trimmed;
-    })
-    .pipe(
-      z.string().url("올바른 URL 형식을 입력해주세요").refine(
-        (val) => {
-          try {
-            const urlObj = new URL(val);
-            // 최소한 도메인에 점(.)이 포함되어 있는지 확인하여 '아무거나' 입력을 방지
-            return urlObj.hostname.includes('.');
-          } catch {
-            return false;
-          }
-        },
-        { message: "올바른 URL 형식을 입력해주세요" }
-      )
-    ),
-});
-
-type LinkFormValues = z.infer<typeof linkSchema>;
-
 export default function MyPage() {
-  const [links, setLinks] = useState<Link[]>(dummyLinks);
+  const [links, setLinks] = useState<Link[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [deletingLink, setDeletingLink] = useState<Link | null>(null);
+  
+  // 로딩 및 제출 상태 관리
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAdding, setIsAdding] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // 프로필 정보 상태
   const [displayName, setDisplayName] = useState("My Links");
@@ -76,14 +51,46 @@ export default function MyPage() {
   const [isEditingBio, setIsEditingBio] = useState(false);
   const [tempBio, setTempBio] = useState("");
 
-  // 링크 인라인 편집 상태
-  const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
-  const [editingField, setEditingField] = useState<"title" | "url" | null>(null);
-  const [editingValue, setEditingValue] = useState("");
-
   const nameInputRef = useRef<HTMLInputElement>(null);
   const bioTextareaRef = useRef<HTMLTextAreaElement>(null);
-  const linkInputRef = useRef<HTMLInputElement>(null);
+
+  // Firestore에서 링크 목록 가져오기
+  useEffect(() => {
+    const fetchLinks = async () => {
+      try {
+        setIsLoading(true);
+        const linksRef = collection(db, "users", "anonymous", "links");
+        const q = query(linksRef, orderBy("createdAt", "desc"));
+        const querySnapshot = await getDocs(q);
+        const fetchedLinks: Link[] = [];
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          let faviconUrl = "";
+          try {
+            const urlObj = new URL(data.url || "");
+            faviconUrl = `https://www.google.com/s2/favicons?domain=${urlObj.hostname}&sz=64`;
+          } catch {
+            // URL 형식 오류 시 기본 빈 값 처리
+          }
+
+          fetchedLinks.push({
+            id: doc.id,
+            title: data.title || "",
+            url: data.url || "",
+            faviconUrl: faviconUrl,
+            createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+          });
+        });
+        setLinks(fetchedLinks);
+      } catch (err) {
+        console.error("Failed to fetch links:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchLinks();
+  }, []);
 
   // 포커스 제어
   useEffect(() => {
@@ -100,18 +107,11 @@ export default function MyPage() {
     }
   }, [isEditingBio]);
 
-  useEffect(() => {
-    if (editingLinkId && linkInputRef.current) {
-      linkInputRef.current.focus();
-      linkInputRef.current.select();
-    }
-  }, [editingLinkId, editingField]);
-
   const {
     register,
     handleSubmit,
     reset,
-    formState: { errors, isValid },
+    formState: { errors, isSubmitting },
   } = useForm<LinkFormValues>({
     resolver: zodResolver(linkSchema),
     mode: "onChange",
@@ -122,6 +122,7 @@ export default function MyPage() {
   });
 
   const handleOpenChange = (open: boolean) => {
+    if (isSubmitting || isAdding) return; // 제출 중에는 다이얼로그 닫기 방지
     setIsDialogOpen(open);
     if (!open) {
       reset();
@@ -131,11 +132,12 @@ export default function MyPage() {
   // 신규 링크 추가
   const onSubmit = async (data: LinkFormValues) => {
     try {
+      setIsAdding(true);
       const urlObj = new URL(data.url);
       const domain = urlObj.hostname;
       const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
 
-      // Firestore에 데이터 저장 (요청에 따라 4개 필드만 저장)
+      // Firestore에 데이터 저장
       const linksRef = collection(db, "users", "anonymous", "links");
       const docRef = await addDoc(linksRef, {
         title: data.title.trim(),
@@ -156,14 +158,30 @@ export default function MyPage() {
       handleOpenChange(false);
     } catch (err) {
       console.error("Link add error", err);
+    } finally {
+      setIsAdding(false);
     }
   };
 
-  // 링크 삭제
-  const handleDeleteLink = (id: string, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setLinks((prev) => prev.filter((link) => link.id !== id));
+  // 링크 수정 시 로컬 상태 업데이트
+  const handleUpdateLink = (updatedLink: Link) => {
+    setLinks((prev) => prev.map((l) => (l.id === updatedLink.id ? updatedLink : l)));
+  };
+
+  // 링크 삭제 승인 처리
+  const handleDeleteConfirm = async () => {
+    if (!deletingLink) return;
+    try {
+      setIsDeleting(true);
+      const docRef = doc(db, "users", "anonymous", "links", deletingLink.id);
+      await deleteDoc(docRef);
+      setLinks((prev) => prev.filter((l) => l.id !== deletingLink.id));
+      setDeletingLink(null);
+    } catch (err) {
+      console.error("Failed to delete link:", err);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   // 닉네임 편집 저장 및 롤백
@@ -188,54 +206,6 @@ export default function MyPage() {
       setBio(trimmed);
     }
     setIsEditingBio(false);
-  };
-
-  // 링크 편집 저장 및 롤백
-  const handleLinkSave = (id: string, field: "title" | "url") => {
-    const trimmed = editingValue.trim();
-    const originalLink = links.find((l) => l.id === id);
-
-    if (!originalLink) {
-      setEditingLinkId(null);
-      setEditingField(null);
-      return;
-    }
-
-    if (trimmed === "") {
-      // 무음 롤백
-      setEditingLinkId(null);
-      setEditingField(null);
-      return;
-    }
-
-    setLinks((prev) =>
-      prev.map((link) => {
-        if (link.id === id) {
-          if (field === "title") {
-            return { ...link, title: trimmed };
-          } else {
-            // URL인 경우 https:// 처리 및 파비콘 재생성
-            let formattedUrl = trimmed;
-            if (!formattedUrl.startsWith("http://") && !formattedUrl.startsWith("https://")) {
-              formattedUrl = "https://" + formattedUrl;
-            }
-            try {
-              const urlObj = new URL(formattedUrl);
-              const domain = urlObj.hostname;
-              const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
-              return { ...link, url: formattedUrl, faviconUrl };
-            } catch {
-              // 유효하지 않은 URL인 경우 롤백
-              return link;
-            }
-          }
-        }
-        return link;
-      })
-    );
-
-    setEditingLinkId(null);
-    setEditingField(null);
   };
 
   return (
@@ -396,6 +366,7 @@ export default function MyPage() {
                             id="title"
                             placeholder="예: 내 포트폴리오, Instagram"
                             {...register("title")}
+                            disabled={isSubmitting || isAdding}
                             className={`h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-zinc-900 text-base font-bold ${errors.title ? "border-red-500 focus-visible:ring-red-500" : ""}`}
                           />
                           {errors.title && <p className="text-xs font-bold text-red-500 ml-1">{errors.title.message}</p>}
@@ -408,6 +379,7 @@ export default function MyPage() {
                             id="url"
                             placeholder="예: github.com/username 또는 https://..."
                             {...register("url")}
+                            disabled={isSubmitting || isAdding}
                             className={`h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-zinc-900 text-base font-bold ${errors.url ? "border-red-500 focus-visible:ring-red-500" : ""}`}
                             dir="ltr"
                           />
@@ -419,15 +391,24 @@ export default function MyPage() {
                           type="button"
                           variant="ghost"
                           onClick={() => handleOpenChange(false)}
+                          disabled={isSubmitting || isAdding}
                           className="h-13 px-6 hover:bg-zinc-100 text-zinc-500 font-bold rounded-2xl flex-1"
                         >
                           취소
                         </Button>
                         <Button
                           type="submit"
-                          className="h-13 px-10 font-black rounded-2xl bg-primary hover:opacity-90 text-primary-foreground shadow-xl shadow-primary/20 transition-all active:scale-95 flex-1"
+                          disabled={isSubmitting || isAdding}
+                          className="h-13 px-10 font-black rounded-2xl bg-primary hover:opacity-90 text-primary-foreground shadow-xl shadow-primary/20 transition-all active:scale-95 flex-1 flex items-center justify-center gap-2"
                         >
-                          추가
+                          {isSubmitting || isAdding ? (
+                            <>
+                              <IconLoader2 className="animate-spin w-5 h-5" />
+                              <span>추가 중...</span>
+                            </>
+                          ) : (
+                            "추가"
+                          )}
                         </Button>
                       </DialogFooter>
                     </form>
@@ -437,99 +418,24 @@ export default function MyPage() {
 
               {/* Editable Link List */}
               <div className="flex flex-col gap-3">
-                {links.length === 0 ? (
+                {isLoading ? (
+                  <div className="flex flex-col items-center justify-center py-16 px-4 rounded-2xl border border-dashed border-zinc-200 bg-white text-center">
+                    <IconLoader2 className="w-8 h-8 animate-spin text-zinc-400 mb-2" />
+                    <p className="text-sm font-bold text-zinc-400">링크를 불러오는 중입니다...</p>
+                  </div>
+                ) : links.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16 px-4 rounded-2xl border border-dashed border-zinc-200 bg-white text-center">
                     <span className="text-4xl mb-3">📁</span>
                     <p className="text-sm font-bold text-zinc-400">아직 등록된 링크가 없습니다.</p>
                   </div>
                 ) : (
                   links.map((link) => (
-                    <Card key={link.id} className="relative group bg-white border-zinc-200/60 shadow-sm hover:shadow-md transition-all rounded-2xl overflow-hidden p-4">
-                      <div className="flex gap-4 items-center w-full pr-10">
-                        {/* Favicon Icon Box */}
-                        <div className="flex shrink-0 items-center justify-center w-12 h-12 rounded-2xl bg-zinc-50 border border-zinc-100 shadow-sm">
-                          {link.faviconUrl ? (
-                            <img
-                              src={link.faviconUrl}
-                              alt={link.title}
-                              className="w-6 h-6 object-contain"
-                            />
-                          ) : (
-                            <span className="text-zinc-300 text-xs font-black">Link</span>
-                          )}
-                        </div>
-
-                        {/* Title and URL Edit Box */}
-                        <div className="flex-1 flex flex-col gap-1.5 min-w-0">
-                          {/* Inline Title Edit */}
-                          {editingLinkId === link.id && editingField === "title" ? (
-                            <input
-                              ref={linkInputRef}
-                              value={editingValue}
-                              onChange={(e) => setEditingValue(e.target.value)}
-                              onBlur={() => handleLinkSave(link.id, "title")}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") handleLinkSave(link.id, "title");
-                                if (e.key === "Escape") setEditingLinkId(null);
-                              }}
-                              className="h-8 w-full bg-zinc-50 border border-zinc-200 rounded-lg px-2 text-[15px] font-bold text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                            />
-                          ) : (
-                            <div
-                              onClick={() => {
-                                setEditingLinkId(link.id);
-                                setEditingField("title");
-                                setEditingValue(link.title);
-                              }}
-                              className="group/item flex items-center gap-1.5 cursor-pointer max-w-fit"
-                            >
-                              <span className="text-[15px] font-extrabold text-zinc-800 group-hover/item:text-zinc-950 truncate">
-                                {link.title}
-                              </span>
-                              <IconEdit className="w-3.5 h-3.5 text-zinc-400 opacity-0 group-hover/item:opacity-100 transition-opacity" />
-                            </div>
-                          )}
-
-                          {/* Inline URL Edit */}
-                          {editingLinkId === link.id && editingField === "url" ? (
-                            <input
-                              ref={linkInputRef}
-                              value={editingValue}
-                              onChange={(e) => setEditingValue(e.target.value)}
-                              onBlur={() => handleLinkSave(link.id, "url")}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") handleLinkSave(link.id, "url");
-                                if (e.key === "Escape") setEditingLinkId(null);
-                              }}
-                              className="h-7 w-full bg-zinc-50 border border-zinc-200 rounded-lg px-2 text-xs font-semibold text-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                            />
-                          ) : (
-                            <div
-                              onClick={() => {
-                                setEditingLinkId(link.id);
-                                setEditingField("url");
-                                setEditingValue(link.url);
-                              }}
-                              className="group/item flex items-center gap-1.5 cursor-pointer max-w-fit"
-                            >
-                              <span className="text-xs font-semibold text-zinc-400 group-hover/item:text-zinc-600 truncate max-w-[280px]">
-                                {link.url}
-                              </span>
-                              <IconEdit className="w-3.5 h-3.5 text-zinc-400 opacity-0 group-hover/item:opacity-100 transition-opacity" />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Delete Button (pinned to the right) */}
-                      <button
-                        onClick={(e) => handleDeleteLink(link.id, e)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 p-2.5 text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
-                        title="삭제"
-                      >
-                        <IconTrash className="w-5 h-5" />
-                      </button>
-                    </Card>
+                    <LinkCard
+                      key={link.id}
+                      link={link}
+                      onUpdate={handleUpdateLink}
+                      onDeleteClick={setDeletingLink}
+                    />
                   ))
                 )}
               </div>
@@ -634,6 +540,58 @@ export default function MyPage() {
 
         </div>
       </div>
+
+      {/* 삭제 확인 모달 */}
+      <Dialog open={!!deletingLink} onOpenChange={(open) => { if (!open && !isDeleting) setDeletingLink(null); }}>
+        <DialogContent className="sm:max-w-[425px] bg-white border-zinc-200 text-zinc-900 rounded-3xl shadow-2xl p-0 overflow-hidden">
+          <DialogHeader className="p-8 pb-4">
+            <DialogTitle className="text-2xl font-black text-zinc-900">정말 삭제하시겠습니까?</DialogTitle>
+            <DialogDescription className="text-zinc-500 font-medium mt-1">
+              선택한 링크가 영구적으로 삭제됩니다.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-8 py-4 flex flex-col gap-3">
+            <div className="rounded-2xl bg-zinc-50 border border-zinc-100 p-4">
+              <span className="text-xs font-black uppercase tracking-widest text-zinc-400 block mb-1">
+                링크 이름
+              </span>
+              <span className="text-base font-bold text-zinc-800">
+                {deletingLink?.title}
+              </span>
+            </div>
+            <p className="text-xs font-bold text-red-500 ml-1">
+              이 작업은 되돌릴 수 없습니다.
+            </p>
+          </div>
+          <DialogFooter className="p-8 pt-4 flex gap-3">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setDeletingLink(null)}
+              disabled={isDeleting}
+              className="h-13 px-6 hover:bg-zinc-100 text-zinc-500 font-bold rounded-2xl flex-1"
+            >
+              취소
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleDeleteConfirm}
+              disabled={isDeleting}
+              className="h-13 px-6 font-black rounded-2xl transition-all active:scale-95 flex-1 flex items-center justify-center gap-2"
+            >
+              {isDeleting ? (
+                <>
+                  <IconLoader2 className="animate-spin w-5 h-5" />
+                  <span>삭제 중...</span>
+                </>
+              ) : (
+                "삭제하기"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

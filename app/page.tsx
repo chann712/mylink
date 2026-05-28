@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, getDocs, query, orderBy, serverTimestamp } from "firebase/firestore";
-import { dummyLinks, type Link } from "@/data/links";
+import { type Link } from "@/data/links";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -54,10 +54,10 @@ const linkSchema = z.object({
 type LinkFormValues = z.infer<typeof linkSchema>;
 
 export default function Page() {
-  const [links, setLinks] = useState<Link[]>(dummyLinks);
+  const [links, setLinks] = useState<Link[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  // Firestore에서 링크 목록 가져와 dummyLinks와 병합하기
+  // Firestore에서 링크 목록 가져오기
   useEffect(() => {
     const fetchLinks = async () => {
       try {
@@ -83,8 +83,8 @@ export default function Page() {
             createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
           });
         });
-        // Firestore 데이터와 로컬 dummyLinks 병합 (Firestore 데이터가 상단에 위치)
-        setLinks([...fetchedLinks, ...dummyLinks]);
+        // Firestore 데이터만 목록에 세팅 (더미 데이터 제거)
+        setLinks(fetchedLinks);
       } catch (err) {
         console.error("Failed to fetch links:", err);
       }

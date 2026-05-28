@@ -5,7 +5,6 @@ import Link from "next/link";
 import { User } from "firebase/auth";
 import { Button } from "@/components/ui/button";
 import {
-  IconBrandGoogle,
   IconLogout,
   IconExternalLink,
   IconUser,
@@ -65,7 +64,7 @@ export default function Header({ user, displayName, onLogin, onLogout, isLoading
         {/* Left Side: Brand Logo */}
         <div className="flex items-center gap-6">
           <Link href="/" className="flex items-center gap-2 group">
-            <span className="text-xl font-black tracking-tight bg-gradient-to-r from-zinc-900 to-zinc-700 bg-clip-text text-transparent">
+            <span className="text-xl font-black tracking-tight text-blue-600 hover:text-blue-700 transition-colors select-none">
               MyLink
             </span>
           </Link>
@@ -80,7 +79,7 @@ export default function Header({ user, displayName, onLogin, onLogout, isLoading
               {/* Profile Avatar Button */}
               <button
                 onClick={() => setIsDropdownOpen((prev) => !prev)}
-                className="flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:ring-offset-2 rounded-full transition-all active:scale-95 cursor-pointer"
+                className="flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 rounded-full transition-all active:scale-95 cursor-pointer"
                 aria-expanded={isDropdownOpen}
                 aria-haspopup="true"
               >
@@ -92,7 +91,7 @@ export default function Header({ user, displayName, onLogin, onLogout, isLoading
                     referrerPolicy="no-referrer"
                   />
                 ) : (
-                  <div className="flex w-9 h-9 rounded-full bg-zinc-950 text-white font-black text-sm items-center justify-center border border-zinc-700 shadow-sm hover:bg-zinc-800 transition-colors select-none">
+                  <div className="flex w-9 h-9 rounded-full bg-blue-600 text-white font-black text-sm items-center justify-center border border-blue-500 shadow-sm hover:bg-blue-700 transition-colors select-none">
                     {getUserDisplayName().charAt(0).toUpperCase()}
                   </div>
                 )}
@@ -118,17 +117,17 @@ export default function Header({ user, displayName, onLogin, onLogout, isLoading
                     <Link
                       href="/mypage"
                       onClick={() => setIsDropdownOpen(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 text-xs font-bold transition-all"
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-zinc-600 hover:text-blue-600 hover:bg-blue-50/40 text-xs font-bold transition-all group"
                     >
-                      <IconSettings className="w-4 h-4 text-zinc-400" />
+                      <IconSettings className="w-4 h-4 text-zinc-400 group-hover:text-blue-500 transition-colors" />
                       <span>마이페이지 관리</span>
                     </Link>
                     <Link
                       href="/"
                       onClick={() => setIsDropdownOpen(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 text-xs font-bold transition-all"
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-zinc-600 hover:text-blue-600 hover:bg-blue-50/40 text-xs font-bold transition-all group"
                     >
-                      <IconUser className="w-4 h-4 text-zinc-400" />
+                      <IconUser className="w-4 h-4 text-zinc-400 group-hover:text-blue-500 transition-colors" />
                       <span>내 프로필 보기</span>
                       <IconExternalLink className="w-3 h-3 text-zinc-300 ml-auto" />
                     </Link>
@@ -145,7 +144,7 @@ export default function Header({ user, displayName, onLogin, onLogout, isLoading
                     }}
                     className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-zinc-500 hover:text-red-600 hover:bg-red-50/50 text-xs font-bold transition-all text-left cursor-pointer"
                   >
-                    <IconLogout className="w-4 h-4 text-zinc-400 group-hover:text-red-500" />
+                    <IconLogout className="w-4 h-4 text-zinc-400" />
                     <span>로그아웃</span>
                   </button>
                 </div>
@@ -155,10 +154,9 @@ export default function Header({ user, displayName, onLogin, onLogout, isLoading
             // Logout state: show Google login button
             <Button
               onClick={onLogin}
-              className="h-9 gap-2 px-4 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white font-bold transition-all shadow-sm active:scale-95 cursor-pointer text-xs sm:text-sm"
+              className="h-9 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold transition-all shadow-sm active:scale-95 cursor-pointer text-xs flex items-center justify-center"
             >
-              <IconBrandGoogle className="w-4 h-4" />
-              <span>Google로 로그인</span>
+              <span>로그인</span>
             </Button>
           )}
         </div>
@@ -166,4 +164,5 @@ export default function Header({ user, displayName, onLogin, onLogout, isLoading
     </header>
   );
 }
+
 

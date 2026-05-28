@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@base-ui/react": "^1.5.0",
     "@hookform/resolvers": "^5.4.0",
     "@tabler/icons-react": "^3.41.1",
     "class-variance-authority": "^0.7.1",

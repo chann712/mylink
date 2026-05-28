@@ -31,7 +31,7 @@ import {
 
 // Zod 스키마 정의 - url 입력 시 자동으로 https:// 를 접두어로 추가(transform)하고 유효성 검사 수행
 const linkSchema = z.object({
-  title: z.string().min(1, "제목을 입력해주세요").max(50, "제목은 50자 이내로 입력해주세요"),
+  title: z.string().trim().min(1, "제목을 입력해주세요").max(50, "제목은 50자 이내로 입력해주세요"),
   url: z
     .string()
     .min(1, "주소를 입력해주세요")
@@ -43,11 +43,12 @@ const linkSchema = z.object({
       return trimmed;
     })
     .pipe(
-      z.string().refine(
+      z.string().url("올바른 URL 형식을 입력해주세요").refine(
         (val) => {
           try {
-            new URL(val);
-            return true;
+            const urlObj = new URL(val);
+            // 최소한 도메인에 점(.)이 포함되어 있는지 확인하여 '아무거나' 입력을 방지
+            return urlObj.hostname.includes('.');
           } catch {
             return false;
           }

@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { db } from "@/lib/firebase";
+import { collection, addDoc, getDocs, query, orderBy, serverTimestamp } from "firebase/firestore";
 import { dummyLinks, type Link } from "@/data/links";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -55,6 +57,34 @@ export default function Page() {
   const [links, setLinks] = useState<Link[]>(dummyLinks);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
+  // Firestore에서 링크 목록 가져와 dummyLinks와 병합하기
+  useEffect(() => {
+    const fetchLinks = async () => {
+      try {
+        const linksRef = collection(db, "users", "anonymous", "links");
+        const q = query(linksRef, orderBy("createdAt", "desc"));
+        const querySnapshot = await getDocs(q);
+        const fetchedLinks: Link[] = [];
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          fetchedLinks.push({
+            id: doc.id,
+            title: data.title || "",
+            url: data.url || "",
+            faviconUrl: data.faviconUrl || "",
+            createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+          });
+        });
+        // Firestore 데이터와 로컬 dummyLinks 병합 (Firestore 데이터가 상단에 위치)
+        setLinks([...fetchedLinks, ...dummyLinks]);
+      } catch (err) {
+        console.error("Failed to fetch links:", err);
+      }
+    };
+
+    fetchLinks();
+  }, []);
+
   const {
     register,
     handleSubmit,
@@ -76,24 +106,35 @@ export default function Page() {
     }
   };
 
-  const onSubmit = (data: LinkFormValues) => {
+  const onSubmit = async (data: LinkFormValues) => {
     try {
       const urlObj = new URL(data.url);
       const domain = urlObj.hostname;
       const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
 
+      // Firestore에 데이터 저장
+      const linksRef = collection(db, "users", "anonymous", "links");
+      const docRef = await addDoc(linksRef, {
+        title: data.title.trim(),
+        url: data.url,
+        faviconUrl,
+        createdAt: serverTimestamp(),
+        updateAt: serverTimestamp(),
+      });
+
       const newLinkItem: Link = {
-        id: `link-temp-${Date.now()}`,
+        id: docRef.id,
         title: data.title.trim(),
         url: data.url,
         faviconUrl,
         createdAt: new Date().toISOString(),
       };
 
-      setLinks((prev) => [...prev, newLinkItem]);
+      // 새로 추가된 링크를 리스트 최상단에 배치
+      setLinks((prev) => [newLinkItem, ...prev]);
       handleOpenChange(false);
     } catch (err) {
-      console.error("URL parsing error", err);
+      console.error("Link add error", err);
     }
   };
 

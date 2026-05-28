@@ -1,11 +1,99 @@
 "use client";
 
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import { dummyLinks, type Link } from "@/data/links";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { IconPlus } from "@tabler/icons-react";
+
+// Zod 스키마 정의 - url 입력 시 자동으로 https:// 를 접두어로 추가(transform)하고 유효성 검사 수행
+const linkSchema = z.object({
+  title: z.string().min(1, "제목을 입력해주세요").max(50, "제목은 50자 이내로 입력해주세요"),
+  url: z
+    .string()
+    .min(1, "주소를 입력해주세요")
+    .transform((val) => {
+      let trimmed = val.trim();
+      if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+        trimmed = "https://" + trimmed;
+      }
+      return trimmed;
+    })
+    .pipe(
+      z.string().refine(
+        (val) => {
+          try {
+            new URL(val);
+            return true;
+          } catch {
+            return false;
+          }
+        },
+        { message: "올바른 URL 형식을 입력해주세요" }
+      )
+    ),
+});
+
+type LinkFormValues = z.infer<typeof linkSchema>;
 
 export default function Page() {
   const [links, setLinks] = useState<Link[]>(dummyLinks);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<LinkFormValues>({
+    resolver: zodResolver(linkSchema),
+    defaultValues: {
+      title: "",
+      url: "",
+    },
+  });
+
+  const handleOpenChange = (open: boolean) => {
+    setIsDialogOpen(open);
+    if (!open) {
+      reset();
+    }
+  };
+
+  const onSubmit = (data: LinkFormValues) => {
+    try {
+      const urlObj = new URL(data.url);
+      const domain = urlObj.hostname;
+      const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+
+      const newLinkItem: Link = {
+        id: `link-temp-${Date.now()}`,
+        title: data.title.trim(),
+        url: data.url,
+        faviconUrl,
+        createdAt: new Date().toISOString(),
+      };
+
+      setLinks((prev) => [...prev, newLinkItem]);
+      handleOpenChange(false);
+    } catch (err) {
+      console.error("URL parsing error", err);
+    }
+  };
 
   return (
     <main className="relative flex min-h-svh flex-col items-center justify-center overflow-hidden bg-zinc-50 px-4 py-8 selection:bg-zinc-200 text-zinc-900 font-sans">
@@ -25,6 +113,71 @@ export default function Page() {
              안녕하세요. 모든 작업물과 소셜 미디어를 한곳에서 확인하실 수 있습니다.
           </p>
         </header>
+
+        {/* Action Area: Add Link Button */}
+        <section className="w-full mb-6 relative">
+          <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
+            <DialogTrigger className="w-full group flex items-center justify-center gap-3 py-4 rounded-2xl bg-white border border-zinc-200 shadow-sm hover:shadow-md hover:border-zinc-300 transition-all duration-300 outline-none cursor-pointer">
+              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-zinc-950 text-white group-hover:scale-110 transition-transform duration-300">
+                <IconPlus className="w-4 h-4" />
+              </div>
+              <span className="font-bold text-zinc-900 tracking-tight">새 링크 추가</span>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px] bg-white border-zinc-200 text-zinc-900 rounded-3xl shadow-2xl p-0 overflow-hidden">
+              <form onSubmit={handleSubmit(onSubmit)}>
+                <DialogHeader className="p-8 pb-4">
+                  <DialogTitle className="text-2xl font-black text-zinc-900">새 링크 추가</DialogTitle>
+                  <DialogDescription className="text-zinc-500 font-medium mt-1">
+                    프로필에 표시할 링크 정보를 입력해 주세요. URL 입력 시 자동으로 형식이 검증됩니다.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-6 p-8 py-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="title" className="text-xs font-black uppercase tracking-widest text-zinc-400 ml-1">
+                      링크 제목
+                    </Label>
+                    <Input
+                      id="title"
+                      placeholder="예: 내 블로그, Instagram"
+                      {...register("title")}
+                      className={`h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-zinc-900 text-base font-bold ${errors.title ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+                    />
+                    {errors.title && <p className="text-xs font-bold text-red-500 ml-1">{errors.title.message}</p>}
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="url" className="text-xs font-black uppercase tracking-widest text-zinc-400 ml-1">
+                      링크 주소
+                    </Label>
+                    <Input
+                      id="url"
+                      placeholder="예: github.com/username 또는 https://..."
+                      {...register("url")}
+                      className={`h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-zinc-900 text-base font-bold ${errors.url ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+                      dir="ltr"
+                    />
+                    {errors.url && <p className="text-xs font-bold text-red-500 ml-1">{errors.url.message}</p>}
+                  </div>
+                </div>
+                <DialogFooter className="p-8 pt-4 flex-col sm:flex-row gap-3">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => handleOpenChange(false)}
+                    className="h-13 px-6 hover:bg-zinc-100 text-zinc-500 font-bold rounded-2xl flex-1"
+                  >
+                    취소
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="h-13 px-10 font-black rounded-2xl bg-zinc-950 text-white shadow-xl transition-all active:scale-95 flex-1"
+                  >
+                    추가
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </section>
 
         {/* Link List */}
         <section className="w-full flex flex-col gap-3">

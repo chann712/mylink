@@ -15,11 +15,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { IconExternalLink, IconTrash, IconPlus } from "@tabler/icons-react";
+import { IconPlus, IconTrash, IconDeviceMobile, IconLock } from "@tabler/icons-react";
 
 export default function MyPage() {
   const [links, setLinks] = useState<Link[]>(dummyLinks);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  
+  // Form State
   const [newTitle, setNewTitle] = useState("");
   const [newUrl, setNewUrl] = useState("");
   const [error, setError] = useState("");
@@ -53,7 +55,7 @@ export default function MyPage() {
       const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
 
       const newLinkItem: Link = {
-        id: `link-${Date.now()}`,
+        id: `link-admin-${Date.now()}`,
         title: newTitle.trim(),
         url: formattedUrl,
         faviconUrl,
@@ -67,33 +69,46 @@ export default function MyPage() {
     }
   };
 
-  const handleDeleteLink = (id: string) => {
+  const handleDeleteLink = (id: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     setLinks((prev) => prev.filter((link) => link.id !== id));
   };
 
   return (
-    <main className="min-h-svh bg-zinc-50 font-sans text-zinc-900 selection:bg-zinc-200 px-4 py-12">
-      <div className="mx-auto max-w-[540px]">
-        
-        {/* 상단: 제목 섹션 */}
-        <header className="mb-10">
-          <h1 className="text-3xl font-black tracking-tight text-zinc-900 mb-2">
-            내 링크 관리
-          </h1>
-          <p className="text-zinc-500 font-medium">
-            프로필에 표시될 링크를 자유롭게 추가하고 관리하세요.
+    <main className="relative flex min-h-svh flex-col items-center justify-center overflow-hidden bg-zinc-50 px-4 py-8 selection:bg-zinc-200 text-zinc-900 font-sans">
+      
+      {/* 관리자 모드 표시 배지 */}
+      <div className="fixed top-6 left-6 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900 text-white text-[10px] font-black uppercase tracking-widest shadow-xl">
+        <IconLock className="w-3 h-3" />
+        Admin Mode
+      </div>
+
+      <div className="fixed top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-zinc-200/40 blur-[100px] pointer-events-none" />
+      <div className="fixed bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] rounded-full bg-slate-200/40 blur-[100px] pointer-events-none" />
+      
+      <div className="relative w-full max-w-[480px] flex flex-col items-center z-10 my-auto">
+        {/* Profile Header (Public과 동일) */}
+        <header className="mb-10 w-full flex flex-col items-center text-center">
+          <div className="mb-5 inline-flex items-center justify-center rounded-full bg-white px-8 py-3 border border-zinc-200 shadow-sm transition-shadow">
+            <h1 className="text-3xl font-extrabold tracking-tight text-zinc-900">
+              My Links
+            </h1>
+          </div>
+          <p className="text-sm text-zinc-500 font-medium tracking-wide max-w-[280px] leading-relaxed">
+             안녕하세요. 모든 작업물과 소셜 미디어를 한곳에서 확인하실 수 있습니다.
           </p>
         </header>
 
-        {/* 중간: 링크 추가 버튼 및 다이얼로그 */}
-        <section className="mb-12">
+        {/* Action Area: Add Link Button (Public과 동일한 스타일) */}
+        <section className="w-full mb-6 relative">
           <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
-              <button className="w-full group flex items-center justify-center gap-3 py-5 rounded-2xl bg-white border border-dashed border-zinc-300 text-zinc-400 hover:text-zinc-900 hover:border-zinc-900 hover:bg-zinc-50 transition-all duration-300 outline-none focus-visible:ring-2 ring-zinc-900">
-                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-zinc-100 text-zinc-400 group-hover:bg-zinc-900 group-hover:text-white transition-all duration-300">
+              <button className="w-full group flex items-center justify-center gap-3 py-4 rounded-2xl bg-white border border-zinc-200 shadow-sm hover:shadow-md hover:border-zinc-300 transition-all duration-300 outline-none focus-visible:ring-2 ring-zinc-200">
+                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground group-hover:scale-110 transition-transform duration-300">
                   <IconPlus className="w-4 h-4" />
                 </div>
-                <span className="font-bold tracking-tight">새 링크 추가</span>
+                <span className="font-bold text-zinc-900 tracking-tight">새 링크 추가</span>
               </button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px] bg-white border-zinc-200 text-zinc-900 rounded-3xl shadow-2xl p-0 overflow-hidden">
@@ -101,7 +116,7 @@ export default function MyPage() {
                 <DialogHeader className="p-8 pb-4">
                   <DialogTitle className="text-2xl font-black text-zinc-900">새 링크 추가</DialogTitle>
                   <DialogDescription className="text-zinc-500 font-medium mt-1">
-                    추가할 링크의 정보를 입력해 주세요.
+                    프로필에 표시할 링크 정보를 입력해 주세요.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-6 p-8 py-4">
@@ -114,7 +129,7 @@ export default function MyPage() {
                       placeholder="링크 제목 입력"
                       value={newTitle}
                       onChange={(e) => setNewTitle(e.target.value)}
-                      className="h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-zinc-900 text-base font-bold"
+                      className="h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-primary text-base font-bold"
                     />
                   </div>
                   <div className="grid gap-2">
@@ -126,7 +141,7 @@ export default function MyPage() {
                       placeholder="https://..."
                       value={newUrl}
                       onChange={(e) => setNewUrl(e.target.value)}
-                      className="h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-zinc-900 text-base font-bold"
+                      className="h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-primary text-base font-bold"
                       dir="ltr"
                     />
                   </div>
@@ -153,68 +168,55 @@ export default function MyPage() {
           </Dialog>
         </section>
 
-        {/* 하단: 링크 목록 */}
-        <section className="space-y-4">
-          <div className="flex items-center justify-between mb-4 px-1">
-            <h2 className="text-lg font-bold text-zinc-800">등록된 링크</h2>
-            <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">
-              {links.length} Links
-            </span>
-          </div>
-          
-          <div className="grid gap-3">
-            {links.map((link) => (
-              <div
-                key={link.id}
-                className="group flex items-center gap-3 p-3 bg-white border border-zinc-200 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300"
-              >
-                {/* 파비콘 */}
-                <div className="flex shrink-0 items-center justify-center w-12 h-12 rounded-xl bg-zinc-50 border border-zinc-100 group-hover:bg-white transition-colors">
-                  {link.faviconUrl ? (
-                    <img
-                      src={link.faviconUrl}
-                      alt={link.title}
-                      className="w-6 h-6 object-contain"
-                    />
-                  ) : (
-                    <IconExternalLink className="w-5 h-5 text-zinc-300" />
-                  )}
-                </div>
+        {/* Link List (Public과 동일한 카드 디자인에 삭제 버튼 추가) */}
+        <section className="w-full flex flex-col gap-3">
+          {links.map((link) => (
+            <div
+              key={link.id}
+              className="w-full relative group"
+            >
+              <Card className="w-full bg-white border-zinc-100 shadow-sm hover:shadow-xl hover:shadow-zinc-200/50 hover:border-zinc-200 transition-all duration-300 ease-out hover:-translate-y-1 overflow-hidden p-0 rounded-2xl">
+                <CardContent className="p-4 flex items-center relative min-h-[72px] w-full">
+                  
+                  {/* Left Icon Area */}
+                  <div className="absolute left-4 flex shrink-0 items-center justify-center w-12 h-12 rounded-2xl bg-zinc-50 border border-zinc-100 shadow-sm group-hover:bg-white transition-all duration-300">
+                    {link.faviconUrl ? (
+                      <img
+                        src={link.faviconUrl}
+                        alt={link.title}
+                        className="w-6 h-6 object-contain"
+                      />
+                    ) : (
+                      <IconPlus className="w-5 h-5 text-zinc-300 rotate-45" />
+                    )}
+                  </div>
+                  
+                  {/* Center Text Area */}
+                  <div className="flex-1 text-center">
+                    <span className="text-[16px] font-bold tracking-tight text-zinc-800 group-hover:text-zinc-900 transition-colors duration-300">
+                      {link.title}
+                    </span>
+                  </div>
 
-                {/* 링크 정보 */}
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-[15px] font-bold text-zinc-800 truncate mb-0.5">
-                    {link.title}
-                  </h3>
-                  <p className="text-xs text-zinc-400 truncate" dir="ltr">
-                    {link.url}
-                  </p>
-                </div>
-
-                {/* 관리 버튼 (삭제) */}
-                <button
-                  onClick={() => handleDeleteLink(link.id)}
-                  className="p-2.5 text-zinc-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-90"
-                  title="삭제"
-                >
-                  <IconTrash className="w-5 h-5" />
-                </button>
-              </div>
-            ))}
-
-            {links.length === 0 && (
-              <div className="text-center py-12 border-2 border-dashed border-zinc-200 rounded-3xl">
-                <p className="text-zinc-400 font-medium">등록된 링크가 없습니다.</p>
-              </div>
-            )}
-          </div>
+                  {/* Right Action: Delete Button */}
+                  <button
+                    onClick={(e) => handleDeleteLink(link.id, e)}
+                    className="absolute right-4 p-2.5 text-zinc-200 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                    title="삭제"
+                  >
+                    <IconTrash className="w-5 h-5" />
+                  </button>
+                </CardContent>
+              </Card>
+            </div>
+          ))}
         </section>
 
-        {/* 푸터 */}
-        <footer className="mt-20 py-8 text-center border-t border-zinc-100">
-          <p className="text-[10px] font-black text-zinc-300 tracking-[0.3em] uppercase">
-            MyLink Admin Dashboard
-          </p>
+        {/* Footer Branding */}
+        <footer className="mt-14 mb-4">
+          <div className="flex items-center justify-center gap-2 opacity-30 hover:opacity-100 transition-all duration-500 cursor-default font-black text-[10px] uppercase text-zinc-900 tracking-[0.2em]">
+            Admin View
+          </div>
         </footer>
       </div>
     </main>

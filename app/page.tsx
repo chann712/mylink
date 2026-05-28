@@ -39,39 +39,32 @@ export default function Page() {
 
   const handleAddLink = (e: React.FormEvent) => {
     e.preventDefault();
-    setTitleError("");
-    setUrlError("");
 
-    let isValid = true;
     if (!newTitle.trim()) {
-      setTitleError("제목을 입력해주세요.");
-      isValid = false;
-    } else if (newTitle.trim().length > 50) {
-      setTitleError("제목은 50자를 초과할 수 없습니다.");
-      isValid = false;
+      alert("제목을 입력해주세요");
+      return;
+    }
+
+    if (!newUrl.trim()) {
+      alert("주소를 입력해주세요");
+      return;
     }
 
     let formattedUrl = newUrl.trim();
-    if (!formattedUrl.trim()) {
-      setUrlError("URL을 입력해주세요.");
-      isValid = false;
-    } else {
-      if (!formattedUrl.startsWith("http://") && !formattedUrl.startsWith("https://")) {
-        formattedUrl = "https://" + formattedUrl;
-      }
-      try {
-        const urlObj = new URL(formattedUrl);
-        if (!urlObj.hostname.includes(".")) {
-          setUrlError("올바른 도메인 주소(예: example.com)를 입력해주세요.");
-          isValid = false;
-        }
-      } catch (err) {
-        setUrlError("올바른 URL 형식이 아닙니다.");
-        isValid = false;
-      }
+    if (!formattedUrl.startsWith("http://") && !formattedUrl.startsWith("https://")) {
+      formattedUrl = "https://" + formattedUrl;
     }
 
-    if (!isValid) return;
+    try {
+      const urlObj = new URL(formattedUrl);
+      if (!urlObj.hostname.includes(".")) {
+        alert("올바른 도메인 주소를 입력해주세요.");
+        return;
+      }
+    } catch (err) {
+      alert("올바른 URL 형식이 아닙니다.");
+      return;
+    }
 
     let domain = "";
     try {

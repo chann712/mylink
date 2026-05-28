@@ -99,102 +99,46 @@ export default function Page() {
   };
 
   return (
-    <main className="relative flex min-h-svh flex-col items-center justify-center overflow-hidden bg-[#0c0a09] px-4 py-8 selection:bg-purple-500/30 text-white font-sans">
-      {/* Background ambient lighting (Mesh Gradient effect) */}
-      <div className="fixed top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-violet-600/15 blur-[120px] pointer-events-none" />
-      <div className="fixed bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] rounded-full bg-fuchsia-600/15 blur-[120px] pointer-events-none" />
+    <main className="relative flex min-h-svh flex-col items-center justify-center overflow-hidden bg-zinc-50 px-4 py-8 selection:bg-zinc-200 text-zinc-900 font-sans">
+      {/* Background ambient lighting (Soft Gradient effect for light theme) */}
+      <div className="fixed top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-zinc-200/40 blur-[100px] pointer-events-none" />
+      <div className="fixed bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] rounded-full bg-slate-200/40 blur-[100px] pointer-events-none" />
       
       <div className="relative w-full max-w-[480px] flex flex-col items-center z-10 my-auto">
         {/* Profile Header */}
         <header className="mb-10 w-full flex flex-col items-center text-center">
-          <div className="mb-5 inline-flex items-center justify-center rounded-full bg-white/5 px-8 py-2.5 backdrop-blur-md border border-white/10 shadow-[0_4px_24px_-8px_rgba(0,0,0,0.5)]">
-            <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-br from-white via-white to-white/40 bg-clip-text text-transparent">
+          <div className="mb-5 inline-flex items-center justify-center rounded-full bg-white px-8 py-3 border border-zinc-200 shadow-sm focus-within:shadow-md transition-shadow">
+            <h1 className="text-3xl font-extrabold tracking-tight text-zinc-900">
               My Links
             </h1>
           </div>
-          <p className="text-sm text-zinc-400 font-medium tracking-wide max-w-[280px] leading-relaxed">
+          <p className="text-sm text-zinc-500 font-medium tracking-wide max-w-[280px] leading-relaxed">
              안녕하세요. 모든 작업물과 소셜 미디어를 한곳에서 확인하실 수 있습니다.
           </p>
         </header>
 
-        {/* Link List */}
-        <section className="w-full flex items-center flex-col gap-4">
-          {links.map((link) => (
-            <a
-              key={link.id}
-              href={link.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full outline-none group"
-            >
-              {/* Card component acts as the Glassmorphism button */}
-              <Card className="w-full bg-white/[0.04] border-white/10 backdrop-blur-xl hover:bg-white/[0.08] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-[0_10px_40px_-10px_rgba(168,85,247,0.3)] hover:border-white/20 group-focus-visible:ring-2 ring-purple-500 ring-offset-2 ring-offset-[#0c0a09] overflow-hidden relative p-0 py-0 ring-0 text-white rounded-2xl">
-                {/* Hover shine reflection inside card */}
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-[100%] group-hover:translate-x-[100%] transition-transform duration-700 pointer-events-none" />
-                
-                <CardContent className="p-4 flex items-center relative min-h-[72px] w-full">
-                  
-                  {/* Left Icon Area */}
-                  {link.faviconUrl ? (
-                    <div className="absolute left-4 flex shrink-0 items-center justify-center w-12 h-12 rounded-[14px] bg-white/10 shadow-inner border border-white/5 group-hover:scale-110 group-hover:bg-white/20 transition-all duration-300">
-                      <img
-                        src={link.faviconUrl}
-                        alt={`${link.title} 아이콘`}
-                        className="w-6 h-6 object-contain drop-shadow-md"
-                      />
-                    </div>
-                  ) : (
-                    <div className="absolute left-4 flex shrink-0 items-center justify-center w-12 h-12 rounded-[14px] bg-white/10 shadow-inner border border-white/5 group-hover:scale-110 transition-all duration-300" />
-                  )}
-                  
-                  {/* Center Text Area */}
-                  <div className="flex-1 text-center px-18">
-                    <span className="text-[16px] font-bold tracking-wide text-zinc-100 group-hover:text-white transition-colors duration-300">
-                      {link.title}
-                    </span>
-                  </div>
-
-                  {/* Right Arrow Area (Fades in & slides right on hover) */}
-                  <div className="absolute right-6 opacity-0 group-hover:opacity-100 -translate-x-3 group-hover:translate-x-0 transition-all duration-300 text-zinc-400 group-hover:text-white">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M5 12h14" />
-                      <path d="m12 5 7 7-7 7" />
-                    </svg>
-                  </div>
-                </CardContent>
-              </Card>
-            </a>
-          ))}
-
-          {/* Add Link Dialog */}
+        {/* Action Area: Add Link Button (Now at the top) */}
+        <section className="w-full mb-6 relative">
           <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
-              <button className="mt-4 w-full flex items-center justify-center gap-2 py-4 rounded-2xl border border-dashed border-white/20 text-zinc-400 hover:text-white hover:bg-white/5 hover:border-white/40 transition-all duration-300 outline-none focus-visible:ring-2 ring-purple-500 ring-offset-2 ring-offset-[#0c0a09]">
-                <IconPlus className="w-5 h-5" />
-                <span className="font-semibold tracking-wide">새 링크 추가</span>
+              <button className="w-full group flex items-center justify-center gap-3 py-4 rounded-2xl bg-white border border-zinc-200 shadow-sm hover:shadow-md hover:border-zinc-300 hover:bg-zinc-50 transition-all duration-300 outline-none focus-visible:ring-2 ring-zinc-200">
+                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-zinc-900 text-white group-hover:scale-110 transition-transform duration-300">
+                  <IconPlus className="w-4 h-4" />
+                </div>
+                <span className="font-bold text-zinc-900 tracking-tight">새 링크 추가</span>
               </button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px] bg-[#1a1818] border-white/10 text-white rounded-2xl">
+            <DialogContent className="sm:max-w-[425px] bg-white border-zinc-200 text-zinc-900 rounded-2xl shadow-2xl">
               <form onSubmit={handleAddLink}>
                 <DialogHeader>
-                  <DialogTitle className="text-xl font-bold">새 링크 추가</DialogTitle>
-                  <DialogDescription className="text-zinc-400">
+                  <DialogTitle className="text-xl font-bold text-zinc-900">새 링크 추가</DialogTitle>
+                  <DialogDescription className="text-zinc-500 mt-1">
                     프로필에 표시할 링크의 제목과 목적지 URL을 입력해주세요.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-6 py-6">
                   <div className="grid gap-2">
-                    <Label htmlFor="title" className="text-sm font-medium text-zinc-300">
+                    <Label htmlFor="title" className="text-sm font-semibold text-zinc-700">
                       제목
                     </Label>
                     <Input
@@ -205,12 +149,12 @@ export default function Page() {
                         setNewTitle(e.target.value);
                         if (titleError) setTitleError("");
                       }}
-                      className={`h-11 rounded-lg bg-black/50 text-white focus-visible:ring-purple-500 ${titleError ? "border-red-500" : "border-white/10"}`}
+                      className={`h-12 rounded-xl bg-zinc-50 text-zinc-900 border-zinc-200 focus-visible:ring-zinc-900 ${titleError ? "border-red-500 ring-1 ring-red-500" : ""}`}
                     />
-                    {titleError && <p className="text-xs text-red-500">{titleError}</p>}
+                    {titleError && <p className="text-xs font-medium text-red-500 mt-1">{titleError}</p>}
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="url" className="text-sm font-medium text-zinc-300">
+                    <Label htmlFor="url" className="text-sm font-semibold text-zinc-700">
                       URL
                     </Label>
                     <Input
@@ -221,24 +165,24 @@ export default function Page() {
                         setNewUrl(e.target.value);
                         if (urlError) setUrlError("");
                       }}
-                      className={`relative flex h-11 w-full rounded-lg bg-black/50 px-3 py-2 text-base text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm ${urlError ? "border-red-500 border-2" : "border border-white/10"}`}
+                      className={`h-12 rounded-xl bg-zinc-50 text-zinc-900 border-zinc-200 focus-visible:ring-zinc-900 ${urlError ? "border-red-500 ring-1 ring-red-500" : ""}`}
                       dir="ltr"
                     />
-                    {urlError && <p className="text-xs text-red-500">{urlError}</p>}
+                    {urlError && <p className="text-xs font-medium text-red-500 mt-1">{urlError}</p>}
                   </div>
                 </div>
-                <DialogFooter>
+                <DialogFooter className="gap-2">
                   <Button
                     type="button"
                     variant="ghost"
                     onClick={() => handleOpenChange(false)}
-                    className="hover:bg-white/10 text-zinc-300 hover:text-white rounded-lg"
+                    className="h-11 px-6 hover:bg-zinc-100 text-zinc-600 font-semibold rounded-xl"
                   >
                     취소
                   </Button>
                   <Button
                     type="submit"
-                    className="bg-purple-600 hover:bg-purple-700 text-white rounded-lg"
+                    className="h-11 px-8 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl shadow-lg shadow-zinc-200 transition-all active:scale-95"
                   >
                     추가하기
                   </Button>
@@ -248,10 +192,65 @@ export default function Page() {
           </Dialog>
         </section>
 
+        {/* Link List */}
+        <section className="w-full flex flex-col gap-3">
+          {links.map((link) => (
+            <a
+              key={link.id}
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full outline-none group"
+            >
+              <Card className="w-full bg-white border-zinc-100 shadow-sm hover:shadow-xl hover:shadow-zinc-200/50 hover:border-zinc-200 transition-all duration-300 ease-out hover:-translate-y-1 group-focus-visible:ring-2 ring-zinc-900 ring-offset-2 ring-offset-white overflow-hidden relative p-0 rounded-2xl">
+                <CardContent className="p-4 flex items-center relative min-h-[72px] w-full">
+                  
+                  {/* Left Icon Area */}
+                  {link.faviconUrl ? (
+                    <div className="absolute left-4 flex shrink-0 items-center justify-center w-12 h-12 rounded-2xl bg-zinc-50 border border-zinc-100 shadow-sm group-hover:bg-white transition-all duration-300">
+                      <img
+                        src={link.faviconUrl}
+                        alt={`${link.title} 아이콘`}
+                        className="w-6 h-6 object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <div className="absolute left-4 flex shrink-0 items-center justify-center w-12 h-12 rounded-2xl bg-zinc-50 border border-zinc-100" />
+                  )}
+                  
+                  {/* Center Text Area */}
+                  <div className="flex-1 text-center">
+                    <span className="text-[16px] font-bold tracking-tight text-zinc-800 group-hover:text-zinc-900 transition-colors duration-300">
+                      {link.title}
+                    </span>
+                  </div>
+
+                  {/* Right Arrow Area */}
+                  <div className="absolute right-6 opacity-0 group-hover:opacity-100 -translate-x-3 group-hover:translate-x-0 transition-all duration-300 text-zinc-400">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="m9 18 6-6-6-6" />
+                    </svg>
+                  </div>
+                </CardContent>
+              </Card>
+            </a>
+          ))}
+        </section>
+
         {/* Footer Branding */}
         <footer className="mt-14 mb-4">
-          <div className="flex items-center justify-center gap-2 opacity-40 hover:opacity-80 transition-opacity cursor-default">
-            <span className="text-[10px] font-bold tracking-[0.25em] uppercase text-zinc-300">
+          <div className="flex items-center justify-center gap-2 opacity-30 hover:opacity-100 transition-all duration-500 cursor-default">
+            <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-zinc-900">
               Powered by MyLink
             </span>
           </div>

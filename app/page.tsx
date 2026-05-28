@@ -275,8 +275,9 @@ export default function Page() {
             </Button>
             <Button
               type="button"
+              variant="destructive"
               onClick={handleDeleteConfirm}
-              className="h-13 px-6 font-black rounded-2xl bg-red-600 hover:bg-red-700 text-white shadow-xl shadow-red-600/20 transition-all active:scale-95 flex-1"
+              className="h-13 px-6 font-black rounded-2xl transition-all active:scale-95 flex-1"
             >
               삭제하기
             </Button>

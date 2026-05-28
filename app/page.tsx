@@ -122,7 +122,7 @@ export default function Page() {
           <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
               <button className="w-full group flex items-center justify-center gap-3 py-4 rounded-2xl bg-white border border-zinc-200 shadow-sm hover:shadow-md hover:border-zinc-300 hover:bg-zinc-50 transition-all duration-300 outline-none focus-visible:ring-2 ring-zinc-200">
-                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-zinc-900 text-white group-hover:scale-110 transition-transform duration-300">
+                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground group-hover:scale-110 transition-transform duration-300">
                   <IconPlus className="w-4 h-4" />
                 </div>
                 <span className="font-bold text-zinc-900 tracking-tight">새 링크 추가</span>

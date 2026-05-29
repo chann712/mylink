@@ -563,11 +563,11 @@ export default function MyPage() {
                     setTempName(profile.name);
                     setIsEditingName(true);
                   }}
-                  className="group inline-flex items-center gap-1.5 font-black text-2xl text-zinc-900 tracking-tight cursor-pointer hover:underline decoration-zinc-400 select-none"
+                  className="group relative inline-flex items-center font-black text-2xl text-zinc-900 tracking-tight cursor-pointer hover:underline decoration-zinc-400 select-none"
                   title="클릭하여 이름 수정"
                 >
                   <span>{profile.name || "이름"}</span>
-                  <IconEdit className="w-4 h-4 text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                  <IconEdit className="absolute left-full ml-1.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                 </h1>
               )}
             </div>
@@ -611,11 +611,11 @@ export default function MyPage() {
                     setTempUsername(profile.username);
                     setIsEditingUsername(true);
                   }}
-                  className="group inline-flex items-center gap-1 font-mono text-sm text-zinc-500 cursor-pointer hover:text-zinc-800 select-none"
+                  className="group relative inline-flex items-center font-mono text-sm text-zinc-500 cursor-pointer hover:text-zinc-800 select-none"
                   title="클릭하여 Username 수정"
                 >
                   <span>@{profile.username || "username"}</span>
-                  <IconEdit className="w-3.5 h-3.5 text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                  <IconEdit className="absolute left-full ml-1 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                 </div>
               )}
             </div>
@@ -656,13 +656,13 @@ export default function MyPage() {
                     setTempBio(profile.bio);
                     setIsEditingBio(true);
                   }}
-                  className="group inline-flex items-center gap-1.5 bg-zinc-100/80 hover:bg-zinc-200/50 px-4 py-1.5 rounded-full cursor-pointer transition-colors max-w-full select-none"
+                  className="group relative inline-flex items-center bg-zinc-100/80 hover:bg-zinc-200/50 px-4 py-1.5 rounded-full cursor-pointer transition-colors max-w-full select-none"
                   title="클릭하여 자기소개 수정"
                 >
                   <span className="font-semibold text-zinc-700 text-xs leading-relaxed break-all">
                     {profile.bio || "자기소개가 없습니다."}
                   </span>
-                  <IconEdit className="w-3.5 h-3.5 text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                  <IconEdit className="absolute left-full ml-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                 </div>
               )}
             </div>

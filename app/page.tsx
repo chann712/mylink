@@ -64,6 +64,7 @@ export default function Page() {
       <Header
         user={user}
         displayName=""
+        username=""
         onLogin={handleLogin}
         onLogout={handleLogout}
         isLoading={authLoading}

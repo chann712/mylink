@@ -14,12 +14,13 @@ import {
 interface HeaderProps {
   user: User | null;
   displayName: string;
+  username: string;
   onLogin: () => Promise<void>;
   onLogout: () => Promise<void>;
   isLoading: boolean;
 }
 
-export default function Header({ user, displayName, onLogin, onLogout, isLoading }: HeaderProps) {
+export default function Header({ user, displayName, username, onLogin, onLogout, isLoading }: HeaderProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -123,9 +124,11 @@ export default function Header({ user, displayName, onLogin, onLogout, isLoading
                       <span>마이페이지 관리</span>
                     </Link>
                     <Link
-                      href="/"
+                      href={username ? `/${username}` : "#"}
                       onClick={() => setIsDropdownOpen(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-zinc-600 hover:text-blue-600 hover:bg-blue-50/40 text-xs font-bold transition-all group"
+                      className={`flex items-center gap-2.5 px-3 py-2 rounded-xl hover:text-blue-600 hover:bg-blue-50/40 text-xs font-bold transition-all group ${
+                        username ? "text-zinc-600" : "text-zinc-400 pointer-events-none opacity-55"
+                      }`}
                     >
                       <IconUser className="w-4 h-4 text-zinc-400 group-hover:text-blue-500 transition-colors" />
                       <span>내 프로필 보기</span>

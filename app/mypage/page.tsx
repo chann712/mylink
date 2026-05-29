@@ -480,6 +480,7 @@ export default function MyPage() {
       <Header
         user={user}
         displayName={profile.name}
+        username={profile.username}
         onLogin={handleLogin}
         onLogout={handleLogout}
         isLoading={authLoading}

@@ -4,6 +4,7 @@ export type Link = {
   url: string;
   faviconUrl?: string; // PRD 기준: 구글 Favicon API를 통한 자동 연동 경로
   createdAt: string; // PRD 기준: 단순 정렬을 위한 등록 시각 (ISO string)
+  clickCount?: number; // 추가: 누적 클릭 수 (조회수)
 };
 
 export const dummyLinks: Link[] = [

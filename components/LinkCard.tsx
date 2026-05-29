@@ -12,7 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { IconPencil, IconTrash, IconLoader2 } from "@tabler/icons-react";
+import { IconPencil, IconTrash, IconLoader2, IconEye } from "@tabler/icons-react";
 
 interface LinkCardProps {
   link: Link;
@@ -170,9 +170,13 @@ export default function LinkCard({ link, onDeleteClick }: LinkCardProps) {
                 <div className="flex shrink-0 items-center justify-center w-12 h-12 rounded-2xl bg-zinc-50 border border-zinc-100" />
               )}
               
-              <div className="flex-1 text-center">
+              <div className="flex-1 text-center flex flex-col items-center justify-center">
                 <span className="text-[16px] font-bold tracking-tight text-zinc-800 transition-colors duration-300">
                   {link.title}
+                </span>
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-zinc-400 mt-0.5 select-none">
+                  <IconEye className="w-3.5 h-3.5 text-zinc-300" />
+                  <span>조회수 {link.clickCount ?? 0}회</span>
                 </span>
               </div>
             </div>

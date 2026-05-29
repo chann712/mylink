@@ -176,6 +176,7 @@ export default function MyPage() {
           url: data.url || "",
           faviconUrl: faviconUrl,
           createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+          clickCount: data.clickCount || 0,
         });
       });
       return fetchedLinks;

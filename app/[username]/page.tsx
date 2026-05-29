@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { IconArrowUpRight } from "@tabler/icons-react";
 import Favicon from "@/components/Favicon";
+import TrackedLink from "@/components/TrackedLink";
 
 export const dynamic = "force-dynamic";
 
@@ -106,12 +107,11 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
             </div>
           ) : (
             links.map((link) => (
-              <a
+              <TrackedLink
                 key={link.id}
-                href={link.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full block group outline-none"
+                userId={userId}
+                linkId={link.id}
+                url={link.url}
               >
                 <div className="w-full bg-white border border-zinc-100 hover:border-zinc-200 shadow-sm hover:shadow-xl hover:shadow-zinc-200/40 transition-all duration-300 ease-out hover:-translate-y-1 group-focus-visible:ring-2 ring-zinc-950 ring-offset-2 ring-offset-zinc-50 rounded-2xl p-4 flex items-center justify-between min-h-[72px]">
                   <div className="flex items-center gap-4 flex-1 min-w-0 pr-4">
@@ -122,7 +122,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                   </div>
                   <IconArrowUpRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600 transition-colors shrink-0 stroke-[2.5]" />
                 </div>
-              </a>
+              </TrackedLink>
             ))
           )}
         </div>

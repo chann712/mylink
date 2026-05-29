@@ -63,13 +63,15 @@ export default function MyPage() {
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  // 프로필 편집 상태
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [editForm, setEditForm] = useState({
-    username: "",
-    name: "",
-    bio: "",
-  });
+  // 프로필 인라인 편집 상태
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [tempName, setTempName] = useState("");
+
+  const [isEditingUsername, setIsEditingUsername] = useState(false);
+  const [tempUsername, setTempUsername] = useState("");
+
+  const [isEditingBio, setIsEditingBio] = useState(false);
+  const [tempBio, setTempBio] = useState("");
 
   // Username 실시간 중복 체크 상태
   const [isCheckingUsername, setIsCheckingUsername] = useState(false);
@@ -203,13 +205,13 @@ export default function MyPage() {
 
   // Username 실시간 중복 체크
   useEffect(() => {
-    if (!isEditingProfile || !editForm.username || !user) {
+    if (!isEditingUsername || !tempUsername || !user) {
       setIsUsernameAvailable(null);
       setUsernameError("");
       return;
     }
 
-    const trimmedUsername = editForm.username.trim().toLowerCase();
+    const trimmedUsername = tempUsername.trim().toLowerCase();
     
     // 1. 형식 유효성 먼저 확인
     if (trimmedUsername.length < 2) {
@@ -271,7 +273,7 @@ export default function MyPage() {
     }, 400);
 
     return () => clearTimeout(checkTimer);
-  }, [editForm.username, isEditingProfile, profile.username, user]);
+  }, [tempUsername, isEditingUsername, profile.username, user]);
 
   // 1. 프로필 업데이트 Mutation (낙관적 업데이트 적용)
   const updateProfileMutation = useMutation({
@@ -372,43 +374,105 @@ export default function MyPage() {
     deleteLinkMutation.mutate(deletingLink.id);
   };
 
-  // 프로필 저장 처리
-  const handleProfileSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
+  // 이름 인라인 저장 처리
+  const handleNameSave = async () => {
+    const trimmed = tempName.trim();
+    if (!trimmed) {
+      alert("이름을 입력해주세요.");
+      setTempName(profile.name);
+      setIsEditingName(false);
+      return;
+    }
+    if (trimmed.length > 50) {
+      alert("이름은 50자 이내로 입력해주세요.");
+      setTempName(profile.name);
+      setIsEditingName(false);
+      return;
+    }
+    if (trimmed === profile.name) {
+      setIsEditingName(false);
+      return;
+    }
 
-    const trimmedUsername = editForm.username.trim().toLowerCase();
-    const trimmedName = editForm.name.trim();
-    const trimmedBio = editForm.bio.trim();
+    try {
+      await updateProfileMutation.mutateAsync({
+        ...profile,
+        name: trimmed,
+      });
+    } catch (err) {
+      console.error(err);
+      setTempName(profile.name);
+    } finally {
+      setIsEditingName(false);
+    }
+  };
 
-    // 형식 유효성 재검증
-    if (trimmedUsername.length < 2 || trimmedUsername.length > 20) {
+  // Username 인라인 저장 처리
+  const handleUsernameSave = async () => {
+    const trimmed = tempUsername.trim().toLowerCase();
+    
+    if (trimmed.length < 2 || trimmed.length > 20) {
       alert("Username은 2자 이상 20자 이하로 입력해주세요.");
+      setTempUsername(profile.username);
+      setIsEditingUsername(false);
       return;
     }
     const usernameRegex = /^[a-z0-9_-]+$/;
-    if (!usernameRegex.test(trimmedUsername)) {
+    if (!usernameRegex.test(trimmed)) {
       alert("Username은 영문 소문자, 숫자, 밑줄(_), 하이픈(-)만 사용할 수 있습니다.");
-      return;
-    }
-    if (!trimmedName) {
-      alert("이름을 입력해주세요.");
-      return;
-    }
-    if (trimmedBio.length > 80) {
-      alert("소개글은 80자 이내로 입력해주세요.");
+      setTempUsername(profile.username);
+      setIsEditingUsername(false);
       return;
     }
     if (isUsernameAvailable === false) {
-      alert("사용할 수 없는 Username입니다. 중복 여부를 확인해주세요.");
+      alert(usernameError || "사용할 수 없는 Username입니다.");
+      setTempUsername(profile.username);
+      setIsEditingUsername(false);
+      return;
+    }
+    if (trimmed === profile.username.toLowerCase()) {
+      setIsEditingUsername(false);
       return;
     }
 
-    updateProfileMutation.mutate({
-      username: trimmedUsername,
-      name: trimmedName,
-      bio: trimmedBio,
-    });
+    try {
+      await updateProfileMutation.mutateAsync({
+        ...profile,
+        username: trimmed,
+      });
+    } catch (err) {
+      console.error(err);
+      setTempUsername(profile.username);
+    } finally {
+      setIsEditingUsername(false);
+    }
+  };
+
+  // 소개글 인라인 저장 처리
+  const handleBioSave = async () => {
+    const trimmed = tempBio.trim();
+    if (trimmed.length > 80) {
+      alert("소개글은 80자 이내로 입력해주세요.");
+      setTempBio(profile.bio);
+      setIsEditingBio(false);
+      return;
+    }
+    if (trimmed === profile.bio) {
+      setIsEditingBio(false);
+      return;
+    }
+
+    try {
+      await updateProfileMutation.mutateAsync({
+        ...profile,
+        bio: trimmed,
+      });
+    } catch (err) {
+      console.error(err);
+      setTempBio(profile.bio);
+    } finally {
+      setIsEditingBio(false);
+    }
   };
 
   return (
@@ -457,375 +521,249 @@ export default function MyPage() {
             </Card>
           </div>
         ) : (
-          /* 로그인 된 상태: 마이페이지 편집 패널 및 실시간 미리보기 */
-          <div className="relative max-w-6xl mx-auto z-10 w-full mt-4">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-              
-              {/* LEFT: Editing Panel (7 columns) */}
-              <section className="lg:col-span-7 flex flex-col gap-6">
-                
-                {/* Header & Title */}
-                <div className="flex flex-col gap-1 pb-4 border-b border-zinc-200/60">
-                  <div className="flex items-center gap-2.5">
-                    <h1 className="text-3xl font-black tracking-tight text-zinc-900">마이페이지 관리</h1>
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-zinc-900 text-white text-[9px] font-black uppercase tracking-widest shadow-sm">
-                      <IconLock className="w-3 h-3 text-emerald-400" />
-                      Admin
-                    </span>
-                  </div>
-                  <p className="text-sm font-semibold text-zinc-500">프로필 정보와 링크들을 실시간으로 편집 관리하세요.</p>
+          /* 로그인 된 상태: 모바일 친화형 1컬럼 프로필 뷰어 */
+          <div className="relative max-w-[480px] mx-auto z-10 w-full mt-4 flex flex-col items-center">
+            
+            {/* 1. 프로필 이미지 (Google Photo) */}
+            <div className="mb-6 flex justify-center">
+              {user.photoURL ? (
+                <img
+                  src={user.photoURL}
+                  alt={`${profile.name} 프로필 이미지`}
+                  className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg ring-4 ring-zinc-100 select-none"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-24 h-24 rounded-full bg-blue-600 text-white font-black text-2xl flex items-center justify-center border-4 border-white shadow-lg ring-4 ring-zinc-100 select-none">
+                  {profile.name.charAt(0).toUpperCase()}
                 </div>
+              )}
+            </div>
 
-                {/* Profile Info Setup Card */}
-                <Card className="bg-white border-zinc-200/60 shadow-sm rounded-2xl overflow-hidden p-6">
-                  <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-sm font-black uppercase tracking-wider text-zinc-400">프로필 설정</h2>
-                    {!isEditingProfile && (
-                      <Button
-                        onClick={() => {
-                          setEditForm({
-                            username: profile.username,
-                            name: profile.name,
-                            bio: profile.bio,
-                          });
-                          setIsEditingProfile(true);
-                        }}
-                        variant="outline"
-                        size="sm"
-                        className="h-8 rounded-lg font-bold text-xs gap-1 cursor-pointer"
-                      >
-                        <IconEdit className="w-3.5 h-3.5" />
-                        수정
-                      </Button>
+            {/* 2. 이름 인라인 편집 */}
+            <div className="mb-2 w-full max-w-[340px] mx-auto flex justify-center h-10 items-center">
+              {isEditingName ? (
+                <Input
+                  value={tempName}
+                  onChange={(e) => setTempName(e.target.value)}
+                  onBlur={handleNameSave}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleNameSave();
+                    if (e.key === "Escape") {
+                      setTempName(profile.name);
+                      setIsEditingName(false);
+                    }
+                  }}
+                  autoFocus
+                  className="h-9 text-center font-extrabold text-xl bg-white border border-zinc-300 rounded-lg px-2 w-full focus-visible:ring-blue-600"
+                />
+              ) : (
+                <h1
+                  onClick={() => {
+                    setTempName(profile.name);
+                    setIsEditingName(true);
+                  }}
+                  className="group inline-flex items-center gap-1.5 font-black text-2xl text-zinc-900 tracking-tight cursor-pointer hover:underline decoration-zinc-400 select-none"
+                  title="클릭하여 이름 수정"
+                >
+                  <span>{profile.name || "이름"}</span>
+                  <IconEdit className="w-4 h-4 text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                </h1>
+              )}
+            </div>
+
+            {/* 3. Username 인라인 편집 */}
+            <div className="mb-3 w-full max-w-[340px] mx-auto flex flex-col items-center min-h-[2.5rem] justify-center">
+              {isEditingUsername ? (
+                <div className="w-full relative flex flex-col items-center">
+                  <div className="flex items-center bg-white border border-zinc-300 rounded-lg w-full px-2">
+                    <span className="text-zinc-400 font-mono text-sm mr-0.5">@</span>
+                    <input
+                      value={tempUsername}
+                      onChange={(e) => setTempUsername(e.target.value)}
+                      onBlur={handleUsernameSave}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleUsernameSave();
+                        if (e.key === "Escape") {
+                          setTempUsername(profile.username);
+                          setIsEditingUsername(false);
+                          setUsernameError("");
+                          setIsUsernameAvailable(null);
+                        }
+                      }}
+                      autoFocus
+                      className="h-9 font-mono text-sm text-zinc-700 w-full outline-none"
+                    />
+                    {isCheckingUsername && (
+                      <IconLoader2 className="w-4 h-4 animate-spin text-zinc-400 shrink-0 ml-1" />
                     )}
                   </div>
-                  
-                  {isEditingProfile ? (
-                    <form onSubmit={handleProfileSave} className="flex flex-col gap-5">
-                      {/* Username */}
-                      <div className="flex flex-col gap-2">
-                        <Label htmlFor="username" className="text-xs font-bold text-zinc-500">
-                          Username (고유 URL 슬러그)
-                        </Label>
-                        <div className="relative">
-                          <Input
-                            id="username"
-                            value={editForm.username}
-                            onChange={(e) => setEditForm(prev => ({ ...prev, username: e.target.value }))}
-                            placeholder="username"
-                            className={`h-11 rounded-xl bg-zinc-50 border-zinc-200 font-bold focus-visible:ring-zinc-900 ${
-                              usernameError ? "border-red-500 focus-visible:ring-red-500" : isUsernameAvailable ? "border-emerald-500 focus-visible:ring-emerald-500" : ""
-                            }`}
-                          />
-                          {isCheckingUsername && (
-                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                              <IconLoader2 className="w-4 h-4 animate-spin text-zinc-400" />
-                            </div>
-                          )}
-                        </div>
-                        {usernameError && (
-                          <p className="text-xs font-semibold text-red-500 ml-1">{usernameError}</p>
-                        )}
-                        {isUsernameAvailable && !usernameError && (
-                          <p className="text-xs font-semibold text-emerald-600 ml-1">사용 가능한 Username입니다.</p>
-                        )}
-                      </div>
+                  {usernameError && (
+                    <p className="text-[10px] font-semibold text-red-500 mt-1">{usernameError}</p>
+                  )}
+                  {isUsernameAvailable && !usernameError && (
+                    <p className="text-[10px] font-semibold text-emerald-600 mt-1">사용 가능</p>
+                  )}
+                </div>
+              ) : (
+                <div
+                  onClick={() => {
+                    setTempUsername(profile.username);
+                    setIsEditingUsername(true);
+                  }}
+                  className="group inline-flex items-center gap-1 font-mono text-sm text-zinc-500 cursor-pointer hover:text-zinc-800 select-none"
+                  title="클릭하여 Username 수정"
+                >
+                  <span>@{profile.username || "username"}</span>
+                  <IconEdit className="w-3.5 h-3.5 text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                </div>
+              )}
+            </div>
 
-                      {/* Name */}
-                      <div className="flex flex-col gap-2">
-                        <Label htmlFor="name" className="text-xs font-bold text-zinc-500">
-                          이름
+            {/* 4. 자기소개 인라인 편집 */}
+            <div className="mb-8 w-full max-w-[340px] mx-auto flex justify-center min-h-[2.5rem] items-center">
+              {isEditingBio ? (
+                <div className="w-full flex flex-col items-center gap-1.5">
+                  <textarea
+                    value={tempBio}
+                    onChange={(e) => {
+                      if (e.target.value.length <= 80) {
+                        setTempBio(e.target.value);
+                      }
+                    }}
+                    onBlur={handleBioSave}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleBioSave();
+                      }
+                      if (e.key === "Escape") {
+                        setTempBio(profile.bio);
+                        setIsEditingBio(false);
+                      }
+                    }}
+                    autoFocus
+                    placeholder="소개글을 입력해주세요 (최대 80자)"
+                    className="flex min-h-[60px] w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none text-center"
+                  />
+                  <span className="text-[9px] font-bold text-zinc-400">
+                    {tempBio.length}/80자
+                  </span>
+                </div>
+              ) : (
+                <div
+                  onClick={() => {
+                    setTempBio(profile.bio);
+                    setIsEditingBio(true);
+                  }}
+                  className="group inline-flex items-center gap-1.5 bg-zinc-100/80 hover:bg-zinc-200/50 px-4 py-1.5 rounded-full cursor-pointer transition-colors max-w-full select-none"
+                  title="클릭하여 자기소개 수정"
+                >
+                  <span className="font-semibold text-zinc-700 text-xs leading-relaxed break-all">
+                    {profile.bio || "자기소개가 없습니다."}
+                  </span>
+                  <IconEdit className="w-3.5 h-3.5 text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                </div>
+              )}
+            </div>
+
+            {/* 5. 새로운 링크 추가하기 버튼 */}
+            <div className="w-full mb-6">
+              <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
+                <DialogTrigger className="w-full inline-flex items-center justify-center h-12 gap-2 font-black text-sm rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/10 transition-all active:scale-[0.98] cursor-pointer border border-transparent">
+                  <IconPlus className="w-4 h-4" />
+                  새로운 링크 추가하기
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[425px] bg-white border-zinc-200 text-zinc-900 rounded-3xl shadow-2xl p-0 overflow-hidden">
+                  <form onSubmit={handleSubmit(onSubmit)}>
+                    <DialogHeader className="p-8 pb-4">
+                      <DialogTitle className="text-2xl font-black text-zinc-900">새 링크 추가</DialogTitle>
+                      <DialogDescription className="text-zinc-500 font-medium mt-1">
+                        프로필에 표시할 링크 정보를 입력해 주세요. URL 입력 시 주소창 형식을 입력하시면 자동으로 검증 처리됩니다.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-6 p-8 py-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="title" className="text-xs font-black uppercase tracking-widest text-zinc-400 ml-1">
+                          링크 제목
                         </Label>
                         <Input
-                          id="name"
-                          value={editForm.name}
-                          onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
-                          placeholder="이름을 입력해주세요"
-                          className="h-11 rounded-xl bg-zinc-50 border-zinc-200 font-bold focus-visible:ring-zinc-900"
-                          required
+                          id="title"
+                          placeholder="예: 내 포트폴리오, Instagram"
+                          {...register("title")}
+                          disabled={isSubmitting || addLinkMutation.isPending}
+                          className={`h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-zinc-900 text-base font-bold ${errors.title ? "border-red-500 focus-visible:ring-red-500" : ""}`}
                         />
+                        {errors.title && <p className="text-xs font-bold text-red-500 ml-1">{errors.title.message}</p>}
                       </div>
-
-                      {/* Bio */}
-                      <div className="flex flex-col gap-2">
-                        <div className="flex justify-between items-center">
-                          <Label htmlFor="bio" className="text-xs font-bold text-zinc-500">
-                            소개글
-                          </Label>
-                          <span className="text-[10px] font-bold text-zinc-400">
-                            {editForm.bio.length}/80자
-                          </span>
-                        </div>
-                        <textarea
-                          id="bio"
-                          value={editForm.bio}
-                          onChange={(e) => {
-                            if (e.target.value.length <= 80) {
-                              setEditForm(prev => ({ ...prev, bio: e.target.value }));
-                            }
-                          }}
-                          placeholder="소개글을 입력해주세요 (최대 80자)"
-                          className="flex min-h-[80px] w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm font-semibold text-zinc-700 placeholder:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+                      <div className="grid gap-2">
+                        <Label htmlFor="url" className="text-xs font-black uppercase tracking-widest text-zinc-400 ml-1">
+                          링크 주소
+                        </Label>
+                        <Input
+                          id="url"
+                          placeholder="예: github.com/username 또는 https://..."
+                          {...register("url")}
+                          disabled={isSubmitting || addLinkMutation.isPending}
+                          className={`h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-zinc-900 text-base font-bold ${errors.url ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+                          dir="ltr"
                         />
-                      </div>
-
-                      {/* Action Buttons */}
-                      <div className="flex justify-end gap-2 mt-2">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          onClick={() => {
-                            setIsEditingProfile(false);
-                            setUsernameError("");
-                            setIsUsernameAvailable(null);
-                          }}
-                          className="h-10 px-4 text-zinc-500 font-bold rounded-lg hover:bg-zinc-100 cursor-pointer"
-                        >
-                          취소
-                        </Button>
-                        <Button
-                          type="submit"
-                          disabled={
-                            isCheckingUsername ||
-                            isUsernameAvailable === false ||
-                            !editForm.username.trim() ||
-                            !editForm.name.trim()
-                          }
-                          className="h-10 px-5 bg-zinc-900 text-white hover:bg-zinc-800 font-bold rounded-lg cursor-pointer"
-                        >
-                          저장
-                        </Button>
-                      </div>
-                    </form>
-                  ) : (
-                    <div className="flex flex-col gap-5">
-                      {/* Readonly Username */}
-                      <div className="flex flex-col gap-1.5">
-                        <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Username</span>
-                        <div className="font-bold text-zinc-900 bg-zinc-50 border border-zinc-200/50 rounded-xl px-4 py-2.5">
-                          @{profile.username || "설정되지 않음"}
-                        </div>
-                      </div>
-
-                      {/* Readonly Name */}
-                      <div className="flex flex-col gap-1.5">
-                        <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">이름</span>
-                        <div className="font-bold text-zinc-900 bg-zinc-50 border border-zinc-200/50 rounded-xl px-4 py-2.5">
-                          {profile.name || "설정되지 않음"}
-                        </div>
-                      </div>
-
-                      {/* Readonly Bio */}
-                      <div className="flex flex-col gap-1.5">
-                        <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">소개글</span>
-                        <div className="font-semibold text-zinc-700 text-sm leading-relaxed bg-zinc-50 border border-zinc-200/50 rounded-xl px-4 py-3 whitespace-pre-wrap">
-                          {profile.bio || "소개글이 없습니다."}
-                        </div>
+                        {errors.url && <p className="text-xs font-bold text-red-500 ml-1">{errors.url.message}</p>}
                       </div>
                     </div>
-                  )}
-                </Card>
-
-                {/* Links Management Area */}
-                <div className="flex flex-col gap-4">
-                  <div className="flex justify-between items-center">
-                    <h2 className="text-sm font-black uppercase tracking-wider text-zinc-400">링크 관리</h2>
-                    
-                    {/* Add Link Dialog */}
-                    <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
-                      <DialogTrigger className="inline-flex items-center justify-center h-10 px-4 gap-2 font-black text-sm rounded-xl bg-primary text-primary-foreground hover:opacity-90 shadow-lg shadow-primary/10 transition-all active:scale-95 cursor-pointer border border-transparent">
-                        <IconPlus className="w-4 h-4" />
-                        새 링크 추가
-                      </DialogTrigger>
-                      <DialogContent className="sm:max-w-[425px] bg-white border-zinc-200 text-zinc-900 rounded-3xl shadow-2xl p-0 overflow-hidden">
-                        <form onSubmit={handleSubmit(onSubmit)}>
-                          <DialogHeader className="p-8 pb-4">
-                            <DialogTitle className="text-2xl font-black text-zinc-900">새 링크 추가</DialogTitle>
-                            <DialogDescription className="text-zinc-500 font-medium mt-1">
-                              프로필에 표시할 링크 정보를 입력해 주세요. URL 입력 시 주소창 형식을 입력하시면 자동으로 검증 처리됩니다.
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="grid gap-6 p-8 py-4">
-                            <div className="grid gap-2">
-                              <Label htmlFor="title" className="text-xs font-black uppercase tracking-widest text-zinc-400 ml-1">
-                                링크 제목
-                              </Label>
-                              <Input
-                                id="title"
-                                placeholder="예: 내 포트폴리오, Instagram"
-                                {...register("title")}
-                                disabled={isSubmitting || addLinkMutation.isPending}
-                                className={`h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-zinc-900 text-base font-bold ${errors.title ? "border-red-500 focus-visible:ring-red-500" : ""}`}
-                              />
-                              {errors.title && <p className="text-xs font-bold text-red-500 ml-1">{errors.title.message}</p>}
-                            </div>
-                            <div className="grid gap-2">
-                              <Label htmlFor="url" className="text-xs font-black uppercase tracking-widest text-zinc-400 ml-1">
-                                링크 주소
-                              </Label>
-                              <Input
-                                id="url"
-                                placeholder="예: github.com/username 또는 https://..."
-                                {...register("url")}
-                                disabled={isSubmitting || addLinkMutation.isPending}
-                                className={`h-13 rounded-2xl bg-zinc-50 border-zinc-200 focus-visible:ring-zinc-900 text-base font-bold ${errors.url ? "border-red-500 focus-visible:ring-red-500" : ""}`}
-                                dir="ltr"
-                              />
-                              {errors.url && <p className="text-xs font-bold text-red-500 ml-1">{errors.url.message}</p>}
-                            </div>
-                          </div>
-                          <DialogFooter className="p-8 pt-4 flex-col sm:flex-row gap-3">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              onClick={() => handleOpenChange(false)}
-                              disabled={isSubmitting || addLinkMutation.isPending}
-                              className="h-13 px-6 hover:bg-zinc-100 text-zinc-500 font-bold rounded-2xl flex-1"
-                            >
-                              취소
-                            </Button>
-                            <Button
-                              type="submit"
-                              disabled={isSubmitting || addLinkMutation.isPending}
-                              className="h-13 px-10 font-black rounded-2xl bg-primary hover:opacity-90 text-primary-foreground shadow-xl shadow-primary/20 transition-all active:scale-95 flex-1 flex items-center justify-center gap-2"
-                            >
-                              {isSubmitting || addLinkMutation.isPending ? (
-                                <>
-                                  <IconLoader2 className="animate-spin w-5 h-5" />
-                                  <span>추가 중...</span>
-                                </>
-                              ) : (
-                                "추가"
-                              )}
-                            </Button>
-                          </DialogFooter>
-                        </form>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
-
-                  {/* Editable Link List */}
-                  <div className="flex flex-col gap-3">
-                    {isProfileLoading || isLinksLoading ? (
-                      <div className="flex flex-col items-center justify-center py-16 px-4 rounded-2xl border border-dashed border-zinc-200 bg-white text-center">
-                        <IconLoader2 className="w-8 h-8 animate-spin text-zinc-400 mb-2" />
-                        <p className="text-sm font-bold text-zinc-400">링크를 불러오는 중입니다...</p>
-                      </div>
-                    ) : links.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-16 px-4 rounded-2xl border border-dashed border-zinc-200 bg-white text-center">
-                        <span className="text-4xl mb-3">📁</span>
-                        <p className="text-sm font-bold text-zinc-400">아직 등록된 링크가 없습니다.</p>
-                      </div>
-                    ) : (
-                      links.map((link) => (
-                        <LinkCard
-                          key={link.id}
-                          link={link}
-                          onDeleteClick={setDeletingLink}
-                        />
-                      ))
-                    )}
-                  </div>
-                </div>
-              </section>
-
-              {/* RIGHT: Live Preview Pane (5 columns) */}
-              <section className="lg:col-span-5 flex flex-col items-center lg:sticky lg:top-20 py-6 lg:py-0">
-                <div className="flex items-center gap-2 mb-4 font-bold text-xs text-zinc-500">
-                  <IconDeviceMobile className="w-4 h-4" />
-                  <span>실시간 모바일 미리보기</span>
-                </div>
-
-                {/* SmartPhone Mockup Shell */}
-                <div className="relative w-full max-w-[340px] aspect-[9/19] rounded-[48px] border-[12px] border-zinc-950 bg-white shadow-2xl overflow-hidden flex flex-col z-10 ring-8 ring-zinc-200/50">
-                  
-                  {/* Phone Camera Notch */}
-                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-zinc-950 rounded-b-2xl z-30 flex items-center justify-center">
-                    <div className="w-2.5 h-2.5 rounded-full bg-zinc-800" />
-                  </div>
-
-                  {/* Preview Content Inside */}
-                  <div className="flex-1 flex flex-col overflow-y-auto px-5 py-12 bg-zinc-50/70 select-none ltr-content relative">
-                    
-                    {/* Soft ambient blur in mobile screen */}
-                    <div className="absolute top-[-20%] left-[-20%] w-[80%] h-[80%] rounded-full bg-zinc-200/30 blur-[40px] pointer-events-none" />
-                    <div className="absolute bottom-[-20%] right-[-20%] w-[80%] h-[80%] rounded-full bg-slate-200/30 blur-[40px] pointer-events-none" />
-                    
-                    {/* Header */}
-                    <header className="mb-8 w-full flex flex-col items-center text-center mt-4 z-10">
-                      <div className="mb-4 inline-flex items-center justify-center rounded-full bg-white px-6 py-2 border border-zinc-200/80 shadow-sm">
-                        <h3 className="text-xl font-extrabold tracking-tight text-zinc-900 break-all">
-                          {isEditingProfile ? editForm.name || "이름" : profile.name || "이름"}
-                        </h3>
-                      </div>
-                      <p className="text-xs text-zinc-500 font-semibold leading-relaxed tracking-wide max-w-[220px] break-words">
-                        {isEditingProfile ? editForm.bio : profile.bio}
-                      </p>
-                    </header>
-
-                    {/* Links list wrapper */}
-                    <div className="w-full flex flex-col gap-2.5 z-10 flex-1">
-                      {links.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-10 px-4 rounded-xl border border-dashed border-zinc-200 bg-white/80 text-center my-auto">
-                          <span className="text-2xl mb-1">📁</span>
-                          <p className="text-[11px] font-bold text-zinc-400">아직 등록된 링크가 없습니다.</p>
-                        </div>
-                      ) : (
-                        links.map((link) => (
-                          <a
-                            key={link.id}
-                            href={link.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="w-full outline-none group cursor-pointer"
-                          >
-                            <Card className="w-full bg-white border-zinc-100/80 shadow-sm hover:shadow-md hover:border-zinc-200 transition-all duration-200 rounded-xl overflow-hidden p-0">
-                              <CardContent className="p-3.5 flex items-center relative min-h-[56px] w-full">
-                                
-                                {/* Left Favicon Area */}
-                                {link.faviconUrl ? (
-                                  <div className="absolute left-3 flex shrink-0 items-center justify-center w-8 h-8 rounded-lg bg-zinc-50 border border-zinc-100 shadow-sm group-hover:bg-white transition-colors">
-                                    <img
-                                      src={link.faviconUrl}
-                                      alt={link.title}
-                                      className="w-4 h-4 object-contain"
-                                    />
-                                  </div>
-                                ) : (
-                                  <div className="absolute left-3 flex shrink-0 items-center justify-center w-8 h-8 rounded-lg bg-zinc-50 border border-zinc-100" />
-                                )}
-                                
-                                {/* Center Text Area */}
-                                <div className="flex-1 text-center px-10">
-                                  <span className="text-[13px] font-extrabold tracking-tight text-zinc-800 group-hover:text-zinc-950 transition-colors">
-                                    {link.title}
-                                  </span>
-                                </div>
-
-                                {/* Right Arrow */}
-                                <div className="absolute right-4 text-zinc-300 group-hover:text-zinc-400 group-hover:translate-x-0.5 transition-all">
-                                  <IconArrowRight className="w-3.5 h-3.5 stroke-[3]" />
-                                </div>
-                              </CardContent>
-                            </Card>
-                          </a>
-                        ))
-                      )}
-                    </div>
-
-                    {/* Footer branding logo */}
-                    <footer className="mt-8 mb-2 shrink-0 z-10">
-                      <div className="flex items-center justify-center gap-1.5 opacity-30 hover:opacity-100 transition-opacity cursor-default">
-                        <span className="text-[8px] font-black tracking-[0.2em] uppercase text-zinc-900">
-                          Powered by MyLink
-                        </span>
-                      </div>
-                    </footer>
-                  </div>
-                </div>
-              </section>
-
+                    <DialogFooter className="p-8 pt-4 flex-col sm:flex-row gap-3">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => handleOpenChange(false)}
+                        disabled={isSubmitting || addLinkMutation.isPending}
+                        className="h-13 px-6 hover:bg-zinc-100 text-zinc-500 font-bold rounded-2xl flex-1"
+                      >
+                        취소
+                      </Button>
+                      <Button
+                        type="submit"
+                        disabled={isSubmitting || addLinkMutation.isPending}
+                        className="h-13 px-10 font-black rounded-2xl bg-primary hover:opacity-90 text-primary-foreground shadow-xl shadow-primary/20 transition-all active:scale-95 flex-1 flex items-center justify-center gap-2"
+                      >
+                        {isSubmitting || addLinkMutation.isPending ? (
+                          <>
+                            <IconLoader2 className="animate-spin w-5 h-5" />
+                            <span>추가 중...</span>
+                          </>
+                        ) : (
+                          "추가"
+                        )}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
             </div>
+
+            {/* 6. 등록된 링크 목록 */}
+            <div className="w-full flex flex-col gap-3">
+              {isProfileLoading || isLinksLoading ? (
+                <div className="flex flex-col items-center justify-center py-16 px-4 rounded-2xl border border-dashed border-zinc-200 bg-white text-center w-full">
+                  <IconLoader2 className="w-8 h-8 animate-spin text-zinc-400 mb-2" />
+                  <p className="text-sm font-bold text-zinc-400">링크를 불러오는 중입니다...</p>
+                </div>
+              ) : links.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 px-4 rounded-2xl border border-dashed border-zinc-200 bg-white text-center w-full">
+                  <span className="text-4xl mb-3">📁</span>
+                  <p className="text-sm font-bold text-zinc-400">아직 등록된 링크가 없습니다.</p>
+                </div>
+              ) : (
+                links.map((link) => (
+                  <LinkCard
+                    key={link.id}
+                    link={link}
+                    onDeleteClick={setDeletingLink}
+                  />
+                ))
+              )}
+            </div>
+
           </div>
         )}
       </main>

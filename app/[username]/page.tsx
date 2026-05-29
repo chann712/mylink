@@ -2,7 +2,8 @@ import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { IconArrowUpRight, IconLink } from "@tabler/icons-react";
+import { IconArrowUpRight } from "@tabler/icons-react";
+import Favicon from "@/components/Favicon";
 
 export const dynamic = "force-dynamic";
 
@@ -39,19 +40,10 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
 
   const links = linksSnapshot.docs.map((doc) => {
     const data = doc.data();
-    let faviconUrl = "";
-    try {
-      const urlObj = new URL(data.url || "");
-      faviconUrl = `https://www.google.com/s2/favicons?domain=${urlObj.hostname}&sz=64`;
-    } catch {
-      // URL 형식 오류 시 처리하지 않음
-    }
-
     return {
       id: doc.id,
       title: data.title || "",
       url: data.url || "",
-      faviconUrl: faviconUrl,
     };
   });
 
@@ -123,23 +115,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
               >
                 <div className="w-full bg-white border border-zinc-100 hover:border-zinc-200 shadow-sm hover:shadow-xl hover:shadow-zinc-200/40 transition-all duration-300 ease-out hover:-translate-y-1 group-focus-visible:ring-2 ring-zinc-950 ring-offset-2 ring-offset-zinc-50 rounded-2xl p-4 flex items-center justify-between min-h-[72px]">
                   <div className="flex items-center gap-4 flex-1 min-w-0 pr-4">
-                    {link.faviconUrl ? (
-                      <div className="flex shrink-0 items-center justify-center w-11 h-11 rounded-xl bg-zinc-50 border border-zinc-100 shadow-sm group-hover:scale-[1.03] transition-transform">
-                        <img
-                          src={link.faviconUrl}
-                          alt=""
-                          className="w-5 h-5 object-contain"
-                          onError={(e) => {
-                            // 이미지 로드 실패 시 디폴트 링크 아이콘으로 대체
-                            (e.target as HTMLElement).style.display = "none";
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex shrink-0 items-center justify-center w-11 h-11 rounded-xl bg-zinc-50 border border-zinc-100 shadow-sm">
-                        <IconLink className="w-4 h-4 text-zinc-400" />
-                      </div>
-                    )}
+                    <Favicon url={link.url} title={link.title} />
                     <span className="text-[15px] font-bold tracking-tight text-zinc-800 truncate">
                       {link.title}
                     </span>

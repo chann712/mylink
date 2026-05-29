@@ -76,7 +76,19 @@ export default function Header({ user, displayName, username, onLogin, onLogout,
           {isLoading ? (
             <div className="h-9 w-24 animate-pulse rounded-xl bg-zinc-100" />
           ) : user ? (
-            <div className="relative" ref={dropdownRef}>
+            <div className="flex items-center gap-2.5">
+              <Button
+                asChild
+                variant="ghost"
+                className="h-9 px-3.5 gap-1.5 rounded-xl border border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 text-zinc-600 hover:text-zinc-900 font-bold transition-all text-xs cursor-pointer shadow-sm shrink-0"
+              >
+                <Link href={username ? `/${username}` : "#"} className={!username ? "pointer-events-none opacity-50" : ""}>
+                  <IconExternalLink className="w-3.5 h-3.5 text-zinc-400" />
+                  <span>내 페이지</span>
+                </Link>
+              </Button>
+
+              <div className="relative" ref={dropdownRef}>
               {/* Profile Avatar Button */}
               <button
                 onClick={() => setIsDropdownOpen((prev) => !prev)}
@@ -152,6 +164,7 @@ export default function Header({ user, displayName, username, onLogin, onLogout,
                   </button>
                 </div>
               )}
+            </div>
             </div>
           ) : (
             // Logout state: show Google login button

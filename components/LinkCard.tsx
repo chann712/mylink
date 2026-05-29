@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { linkSchema, type LinkFormValues } from "@/lib/schemas";
 import { type Link } from "@/data/links";
 import { auth, db } from "@/lib/firebase";
@@ -15,12 +16,12 @@ import { IconPencil, IconTrash, IconLoader2 } from "@tabler/icons-react";
 
 interface LinkCardProps {
   link: Link;
-  onUpdate: (updatedLink: Link) => void;
   onDeleteClick: (link: Link) => void;
 }
 
-export default function LinkCard({ link, onUpdate, onDeleteClick }: LinkCardProps) {
+export default function LinkCard({ link, onDeleteClick }: LinkCardProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const queryClient = useQueryClient();
 
   const {
     register,
@@ -36,33 +37,30 @@ export default function LinkCard({ link, onUpdate, onDeleteClick }: LinkCardProp
     },
   });
 
-  const onSave = async (data: LinkFormValues) => {
-    try {
-      const urlObj = new URL(data.url);
-      const domain = urlObj.hostname;
-      const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
-
-      // Firebase Firestore의 문서 업데이트 (로그인 사용자 UID 적용)
-      const userId = auth.currentUser?.uid || "anonymous";
+  const updateLinkMutation = useMutation({
+    mutationFn: async (data: LinkFormValues) => {
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error("Not authenticated");
       const docRef = doc(db, "users", userId, "links", link.id);
       await updateDoc(docRef, {
         title: data.title.trim(),
         url: data.url,
         updateAt: serverTimestamp(),
       });
-
-      // 부모 컴포넌트의 상태 업데이트
-      onUpdate({
-        ...link,
-        title: data.title.trim(),
-        url: data.url,
-        faviconUrl,
-      });
-
+    },
+    onSuccess: () => {
+      const userId = auth.currentUser?.uid;
+      queryClient.invalidateQueries({ queryKey: ["links", userId] });
       setIsEditing(false);
-    } catch (err) {
+    },
+    onError: (err) => {
       console.error("Failed to update link:", err);
-    }
+      alert("링크 수정에 실패했습니다.");
+    },
+  });
+
+  const onSave = (data: LinkFormValues) => {
+    updateLinkMutation.mutate(data);
   };
 
   const handleCancel = () => {
@@ -88,7 +86,7 @@ export default function LinkCard({ link, onUpdate, onDeleteClick }: LinkCardProp
               id={`edit-title-${link.id}`}
               placeholder="예: 내 블로그, Instagram"
               {...register("title")}
-              disabled={isSubmitting}
+              disabled={isSubmitting || updateLinkMutation.isPending}
               className={`h-11 rounded-xl bg-zinc-50 border-zinc-200 focus-visible:ring-zinc-900 text-sm font-bold ${
                 errors.title ? "border-red-500 focus-visible:ring-red-500" : ""
               }`}
@@ -107,7 +105,7 @@ export default function LinkCard({ link, onUpdate, onDeleteClick }: LinkCardProp
               id={`edit-url-${link.id}`}
               placeholder="예: github.com/username 또는 https://..."
               {...register("url")}
-              disabled={isSubmitting}
+              disabled={isSubmitting || updateLinkMutation.isPending}
               className={`h-11 rounded-xl bg-zinc-50 border-zinc-200 focus-visible:ring-zinc-900 text-sm font-bold ${
                 errors.url ? "border-red-500 focus-visible:ring-red-500" : ""
               }`}
@@ -122,16 +120,16 @@ export default function LinkCard({ link, onUpdate, onDeleteClick }: LinkCardProp
               variant="ghost"
               onClick={handleCancel}
               className="h-9 px-4 hover:bg-zinc-100 text-zinc-500 font-bold rounded-xl text-xs"
-              disabled={isSubmitting}
+              disabled={isSubmitting || updateLinkMutation.isPending}
             >
               취소
             </Button>
             <Button
               type="submit"
               className="h-9 px-5 font-black rounded-xl bg-primary hover:opacity-90 text-primary-foreground shadow-sm transition-all active:scale-95 text-xs flex items-center justify-center gap-1.5"
-              disabled={isSubmitting}
+              disabled={isSubmitting || updateLinkMutation.isPending}
             >
-              {isSubmitting ? (
+              {isSubmitting || updateLinkMutation.isPending ? (
                 <>
                   <IconLoader2 className="animate-spin w-4 h-4" />
                   <span>저장 중...</span>

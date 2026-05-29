@@ -1,7 +1,7 @@
 import { Geist, Geist_Mono, Outfit, Noto_Sans } from "next/font/google"
 
 import "./globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
+import { Providers } from "@/components/providers"
 import { cn } from "@/lib/utils";
 
 const notoSansHeading = Noto_Sans({subsets:['latin'],variable:'--font-heading'});
@@ -25,7 +25,7 @@ export default function RootLayout({
       className={cn("antialiased", fontMono.variable, "font-sans", outfit.variable, notoSansHeading.variable)}
     >
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <Providers>{children}</Providers>
       </body>
     </html>
   )

@@ -9,6 +9,7 @@ import {
   IconExternalLink,
   IconUser,
   IconSettings,
+  IconChartBar,
 } from "@tabler/icons-react";
 
 interface HeaderProps {
@@ -134,6 +135,14 @@ export default function Header({ user, displayName, username, onLogin, onLogout,
                     >
                       <IconSettings className="w-4 h-4 text-zinc-400 group-hover:text-blue-500 transition-colors" />
                       <span>마이페이지 관리</span>
+                    </Link>
+                    <Link
+                      href="/stats"
+                      onClick={() => setIsDropdownOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-zinc-600 hover:text-blue-600 hover:bg-blue-50/40 text-xs font-bold transition-all group"
+                    >
+                      <IconChartBar className="w-4 h-4 text-zinc-400 group-hover:text-blue-500 transition-colors" />
+                      <span>통계 보기</span>
                     </Link>
                     <Link
                       href={username ? `/${username}` : "#"}

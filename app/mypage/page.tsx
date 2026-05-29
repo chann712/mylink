@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import NextLink from "next/link";
 import { auth, db } from "@/lib/firebase";
 import {
   signInWithPopup,
@@ -51,6 +52,7 @@ import {
   IconArrowRight,
   IconLoader2,
   IconBrandGoogle,
+  IconChartBar,
 } from "@tabler/icons-react";
 
 export default function MyPage() {
@@ -669,12 +671,12 @@ export default function MyPage() {
               )}
             </div>
 
-            {/* 5. 새로운 링크 추가하기 버튼 */}
-            <div className="w-full mb-6">
+            {/* 5. 새로운 링크 추가하기 및 통계 보기 버튼 */}
+            <div className="w-full mb-6 flex gap-3">
               <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
-                <DialogTrigger className="w-full inline-flex items-center justify-center h-12 gap-2 font-black text-sm rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/10 transition-all active:scale-[0.98] cursor-pointer border border-transparent">
+                <DialogTrigger className="flex-1 inline-flex items-center justify-center h-12 gap-2 font-black text-sm rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/10 transition-all active:scale-[0.98] cursor-pointer border border-transparent">
                   <IconPlus className="w-4 h-4" />
-                  새로운 링크 추가하기
+                  링크 추가
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[425px] bg-white border-zinc-200 text-zinc-900 rounded-3xl shadow-2xl p-0 overflow-hidden">
                   <form onSubmit={handleSubmit(onSubmit)}>
@@ -741,6 +743,16 @@ export default function MyPage() {
                   </form>
                 </DialogContent>
               </Dialog>
+              <Button
+                asChild
+                variant="outline"
+                className="flex-1 h-12 gap-2 font-black text-sm rounded-xl border border-zinc-200 hover:bg-zinc-100 text-zinc-700 transition-all active:scale-[0.98] cursor-pointer"
+              >
+                <NextLink href="/stats" className="flex items-center justify-center w-full h-full">
+                  <IconChartBar className="w-4 h-4 text-zinc-400 animate-pulse" />
+                  <span>통계 보기</span>
+                </NextLink>
+              </Button>
             </div>
 
             {/* 6. 등록된 링크 목록 */}

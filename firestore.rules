@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. users 문서 규칙 (유저 프로필 및 이메일)
+    match /users/{userId} {
+      // 읽기(조회 및 중복 검사 쿼리)는 누구나 가능
+      allow read: if true;
+
+      // 쓰기는 로그인한 사용자 중 본인 문서만 가능
+      allow create, update: if request.auth != null && request.auth.uid == userId
+        // 데이터 정밀 검증
+        && request.resource.data.profile != null
+        && request.resource.data.profile.name is string
+        && request.resource.data.profile.name.size() >= 1
+        && request.resource.data.profile.name.size() <= 50
+        && request.resource.data.profile.username is string
+        && request.resource.data.profile.username.size() >= 2
+        && request.resource.data.profile.username.size() <= 20
+        && request.resource.data.profile.username.matches('^[a-z0-9_-]+$')
+        && (request.resource.data.profile.bio == null || (request.resource.data.profile.bio is string && request.resource.data.profile.bio.size() <= 80))
+        && (request.resource.data.email == null || (request.resource.data.email is string && request.resource.data.email == request.auth.token.email));
+
+      // 삭제는 본인만 가능
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // 2. links 서브컬렉션 규칙
+    match /users/{userId}/links/{linkId} {
+      // 읽기는 누구나 가능
+      allow read: if true;
+
+      // 쓰기는 본인만 가능
+      allow create, update: if request.auth != null && request.auth.uid == userId
+        // 데이터 정밀 검증
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 1
+        && request.resource.data.title.size() <= 50
+        && request.resource.data.url is string
+        && request.resource.data.url.size() >= 1
+        && (request.resource.data.url.matches('^https?://.*') || request.resource.data.url.matches('^//.*'));
+
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

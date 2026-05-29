@@ -22,6 +22,7 @@ import {
   deleteDoc,
   getDoc,
   setDoc,
+  where,
 } from "firebase/firestore";
 import { type Link } from "@/data/links";
 import { linkSchema, type LinkFormValues } from "@/lib/schemas";
@@ -66,17 +67,24 @@ export default function MyPage() {
   const [authLoading, setAuthLoading] = useState(true);
 
   // 프로필 정보 상태
-  const [displayName, setDisplayName] = useState("My Links");
-  const [bio, setBio] = useState("안녕하세요. 모든 작업물과 소셜 미디어를 한곳에서 확인하실 수 있습니다.");
+  const [profile, setProfile] = useState({
+    username: "",
+    name: "",
+    bio: "",
+  });
 
-  // 프로필 인라인 편집 상태
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [tempName, setTempName] = useState("");
-  const [isEditingBio, setIsEditingBio] = useState(false);
-  const [tempBio, setTempBio] = useState("");
+  // 프로필 편집 상태
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editForm, setEditForm] = useState({
+    username: "",
+    name: "",
+    bio: "",
+  });
 
-  const nameInputRef = useRef<HTMLInputElement>(null);
-  const bioTextareaRef = useRef<HTMLTextAreaElement>(null);
+  // Username 실시간 중복 체크 상태
+  const [isCheckingUsername, setIsCheckingUsername] = useState(false);
+  const [usernameError, setUsernameError] = useState("");
+  const [isUsernameAvailable, setIsUsernameAvailable] = useState<boolean | null>(null);
 
   // 구글 로그인 처리
   const handleLogin = async () => {
@@ -109,28 +117,58 @@ export default function MyPage() {
           const userDocRef = doc(db, "users", currentUser.uid);
           const userDocSnap = await getDoc(userDocRef);
 
-          let currentDisplayName = "";
-          let currentBio = "안녕하세요. 모든 작업물과 소셜 미디어를 한곳에서 확인하실 수 있습니다.";
+          let currentProfile = {
+            username: "",
+            name: "",
+            bio: "안녕하세요. 모든 작업물과 소셜 미디어를 한곳에서 확인하실 수 있습니다.",
+          };
+
+          const emailPrefix = currentUser.email?.split("@")[0] || "user";
 
           if (userDocSnap.exists()) {
             const userData = userDocSnap.data();
-            currentDisplayName = userData.displayName || currentUser.displayName || currentUser.email?.split("@")[0] || "My Links";
-            currentBio = userData.bio !== undefined ? userData.bio : currentBio;
+            
+            // profile 맵이 존재하는지 확인
+            if (userData.profile) {
+              currentProfile = {
+                username: userData.profile.username || emailPrefix,
+                name: userData.profile.name || currentUser.displayName || emailPrefix,
+                bio: userData.profile.bio !== undefined ? userData.profile.bio : "안녕하세요. 모든 작업물과 소셜 미디어를 한곳에서 확인하실 수 있습니다.",
+              };
+            } else {
+              // 마이그레이션: 기존 루트 필드(displayName, bio)가 있는 경우 이를 profile로 이관
+              const legacyName = userData.displayName || currentUser.displayName || emailPrefix;
+              const legacyBio = userData.bio !== undefined ? userData.bio : currentProfile.bio;
+              
+              currentProfile = {
+                username: emailPrefix, // 기본 username은 이메일 prefix
+                name: legacyName,
+                bio: legacyBio,
+              };
+
+              // Firestore에 마이그레이션된 profile 업데이트
+              await setDoc(userDocRef, {
+                profile: currentProfile,
+                updatedAt: serverTimestamp(),
+              }, { merge: true });
+            }
           } else {
-            // 최초 로그인 시 가입 처리 (구글 메일 앞부분 추출하여 displayName 설정)
-            const emailPrefix = currentUser.email?.split("@")[0] || "user";
-            currentDisplayName = emailPrefix;
+            // 최초 로그인 시 가입 처리
+            currentProfile = {
+              username: emailPrefix,
+              name: currentUser.displayName || emailPrefix,
+              bio: currentProfile.bio,
+            };
 
             await setDoc(userDocRef, {
               email: currentUser.email,
-              displayName: currentDisplayName,
-              bio: currentBio,
+              profile: currentProfile,
               createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
             });
           }
 
-          setDisplayName(currentDisplayName);
-          setBio(currentBio);
+          setProfile(currentProfile);
 
           // 2. 해당 사용자의 links 서브컬렉션 로드
           const linksRef = collection(db, "users", currentUser.uid, "links");
@@ -167,8 +205,11 @@ export default function MyPage() {
         // 로그아웃 상태
         setUser(null);
         setLinks([]);
-        setDisplayName("My Links");
-        setBio("안녕하세요. 모든 작업물과 소셜 미디어를 한곳에서 확인하실 수 있습니다.");
+        setProfile({
+          username: "",
+          name: "",
+          bio: "",
+        });
         setIsLoading(false);
         setAuthLoading(false);
       }
@@ -177,20 +218,77 @@ export default function MyPage() {
     return () => unsubscribe();
   }, []);
 
-  // 포커스 제어
+  // Username 실시간 중복 체크
   useEffect(() => {
-    if (isEditingName && nameInputRef.current) {
-      nameInputRef.current.focus();
-      nameInputRef.current.select();
+    if (!isEditingProfile || !editForm.username || !user) {
+      setIsUsernameAvailable(null);
+      setUsernameError("");
+      return;
     }
-  }, [isEditingName]);
 
-  useEffect(() => {
-    if (isEditingBio && bioTextareaRef.current) {
-      bioTextareaRef.current.focus();
-      bioTextareaRef.current.select();
+    const trimmedUsername = editForm.username.trim().toLowerCase();
+    
+    // 1. 형식 유효성 먼저 확인
+    if (trimmedUsername.length < 2) {
+      setUsernameError("Username은 2자 이상 입력해주세요.");
+      setIsUsernameAvailable(false);
+      return;
     }
-  }, [isEditingBio]);
+    if (trimmedUsername.length > 20) {
+      setUsernameError("Username은 20자 이내로 입력해주세요.");
+      setIsUsernameAvailable(false);
+      return;
+    }
+    const usernameRegex = /^[a-z0-9_-]+$/;
+    if (!usernameRegex.test(trimmedUsername)) {
+      setUsernameError("Username은 영문 소문자, 숫자, 밑줄(_), 하이픈(-)만 사용 가능합니다.");
+      setIsUsernameAvailable(false);
+      return;
+    }
+
+    // 본인의 원래 username과 같다면 중복 체크 패스
+    if (trimmedUsername === profile.username.toLowerCase()) {
+      setUsernameError("");
+      setIsUsernameAvailable(true);
+      return;
+    }
+
+    // 2. 디바운스 적용하여 중복 검사 실행
+    setIsCheckingUsername(true);
+    setUsernameError("");
+    setIsUsernameAvailable(null);
+
+    const checkTimer = setTimeout(async () => {
+      try {
+        const usersRef = collection(db, "users");
+        const q = query(usersRef, where("profile.username", "==", trimmedUsername));
+        const querySnapshot = await getDocs(q);
+        
+        let isDuplicated = false;
+        querySnapshot.forEach((doc) => {
+          if (doc.id !== user.uid) {
+            isDuplicated = true;
+          }
+        });
+
+        if (isDuplicated) {
+          setUsernameError("이미 사용 중인 Username입니다.");
+          setIsUsernameAvailable(false);
+        } else {
+          setUsernameError("");
+          setIsUsernameAvailable(true);
+        }
+      } catch (err) {
+        console.error("Username check error:", err);
+        setUsernameError("중복 확인 중 오류가 발생했습니다.");
+        setIsUsernameAvailable(false);
+      } finally {
+        setIsCheckingUsername(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(checkTimer);
+  }, [editForm.username, isEditingProfile, profile.username, user]);
 
   const {
     register,
@@ -270,49 +368,67 @@ export default function MyPage() {
     }
   };
 
-  // 닉네임 편집 저장 및 롤백
-  const handleNameSave = async () => {
-    const trimmed = tempName.trim();
-    if (trimmed === "") {
-      setTempName(displayName); // 무음 롤백
-    } else {
-      setDisplayName(trimmed);
-      if (user) {
-        try {
-          await setDoc(doc(db, "users", user.uid), { displayName: trimmed, updatedAt: serverTimestamp() }, { merge: true });
-        } catch (err) {
-          console.error("Failed to save display name:", err);
-        }
-      }
-    }
-    setIsEditingName(false);
-  };
+  // 프로필 저장 처리
+  const handleProfileSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
 
-  // 소개글 편집 저장 및 롤백
-  const handleBioSave = async () => {
-    const trimmed = tempBio.trim();
-    if (trimmed === "") {
-      setTempBio(bio); // 무음 롤백
-    } else if (trimmed.length > 80) {
-      setTempBio(bio); // 글자수 제한 초과 시 롤백
-    } else {
-      setBio(trimmed);
-      if (user) {
-        try {
-          await setDoc(doc(db, "users", user.uid), { bio: trimmed, updatedAt: serverTimestamp() }, { merge: true });
-        } catch (err) {
-          console.error("Failed to save bio:", err);
-        }
-      }
+    const trimmedUsername = editForm.username.trim().toLowerCase();
+    const trimmedName = editForm.name.trim();
+    const trimmedBio = editForm.bio.trim();
+
+    // 형식 유효성 재검증
+    if (trimmedUsername.length < 2 || trimmedUsername.length > 20) {
+      alert("Username은 2자 이상 20자 이하로 입력해주세요.");
+      return;
     }
-    setIsEditingBio(false);
+    const usernameRegex = /^[a-z0-9_-]+$/;
+    if (!usernameRegex.test(trimmedUsername)) {
+      alert("Username은 영문 소문자, 숫자, 밑줄(_), 하이픈(-)만 사용할 수 있습니다.");
+      return;
+    }
+    if (!trimmedName) {
+      alert("이름을 입력해주세요.");
+      return;
+    }
+    if (trimmedBio.length > 80) {
+      alert("소개글은 80자 이내로 입력해주세요.");
+      return;
+    }
+    if (isUsernameAvailable === false) {
+      alert("사용할 수 없는 Username입니다. 중복 여부를 확인해주세요.");
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const userDocRef = doc(db, "users", user.uid);
+      const newProfile = {
+        username: trimmedUsername,
+        name: trimmedName,
+        bio: trimmedBio,
+      };
+
+      await setDoc(userDocRef, {
+        profile: newProfile,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+
+      setProfile(newProfile);
+      setIsEditingProfile(false);
+    } catch (err) {
+      console.error("Failed to save profile:", err);
+      alert("프로필 저장에 실패했습니다.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="min-h-svh bg-zinc-50/50 flex flex-col">
       <Header
         user={user}
-        displayName={displayName}
+        displayName={profile.name}
         onLogin={handleLogin}
         onLogout={handleLogout}
         isLoading={authLoading}
@@ -375,108 +491,152 @@ export default function MyPage() {
 
                 {/* Profile Info Setup Card */}
                 <Card className="bg-white border-zinc-200/60 shadow-sm rounded-2xl overflow-hidden p-6">
-                  <h2 className="text-sm font-black uppercase tracking-wider text-zinc-400 mb-6">프로필 설정</h2>
-                  
-                  <div className="flex flex-col gap-5">
-                    {/* Nickname (displayName) */}
-                    <div className="flex flex-col gap-2">
-                      <Label className="text-xs font-bold text-zinc-500">닉네임</Label>
-                      {isEditingName ? (
-                        <div className="flex gap-2">
-                          <Input
-                            ref={nameInputRef}
-                            value={tempName}
-                            onChange={(e) => setTempName(e.target.value)}
-                            onBlur={handleNameSave}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") handleNameSave();
-                              if (e.key === "Escape") {
-                                setTempName(displayName);
-                                setIsEditingName(false);
-                              }
-                            }}
-                            className="h-11 rounded-xl bg-zinc-50 border-zinc-200 font-bold focus-visible:ring-zinc-900"
-                          />
-                          <Button onClick={handleNameSave} size="icon" className="h-11 w-11 rounded-xl bg-zinc-900 text-white hover:bg-zinc-800 shrink-0">
-                            <IconCheck className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <div
-                          onClick={() => {
-                            setTempName(displayName);
-                            setIsEditingName(true);
-                          }}
-                          className="group flex items-center justify-between h-11 px-4 rounded-xl bg-zinc-50 hover:bg-zinc-100/80 border border-zinc-200/50 cursor-pointer transition-colors"
-                        >
-                          <span className="font-bold text-zinc-900">{displayName}</span>
-                          <IconEdit className="w-4 h-4 text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Bio (Introduction) */}
-                    <div className="flex flex-col gap-2">
-                      <div className="flex justify-between items-center">
-                        <Label className="text-xs font-bold text-zinc-500">소개글</Label>
-                        <span className="text-[10px] font-bold text-zinc-400">
-                          {isEditingBio ? tempBio.length : bio.length}/80자
-                        </span>
-                      </div>
-                      {isEditingBio ? (
-                        <div className="flex flex-col gap-2">
-                          <textarea
-                            ref={bioTextareaRef}
-                            value={tempBio}
-                            onChange={(e) => {
-                              if (e.target.value.length <= 80) {
-                                setTempBio(e.target.value);
-                              }
-                            }}
-                            onBlur={handleBioSave}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" && !e.shiftKey) {
-                                e.preventDefault();
-                                handleBioSave();
-                              }
-                              if (e.key === "Escape") {
-                                setTempBio(bio);
-                                setIsEditingBio(false);
-                              }
-                            }}
-                            placeholder="소개글을 입력해주세요 (최대 80자)"
-                            className="flex min-h-[80px] w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm font-semibold text-zinc-700 placeholder:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
-                          />
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              variant="ghost"
-                              onClick={() => {
-                                setTempBio(bio);
-                                setIsEditingBio(false);
-                              }}
-                              className="h-9 px-4 text-zinc-500 font-bold rounded-lg hover:bg-zinc-100"
-                            >
-                              취소
-                            </Button>
-                            <Button onClick={handleBioSave} className="h-9 px-4 bg-zinc-900 text-white hover:bg-zinc-800 font-bold rounded-lg">
-                              저장
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div
-                          onClick={() => {
-                            setTempBio(bio);
-                            setIsEditingBio(true);
-                          }}
-                          className="group flex items-start justify-between min-h-[72px] p-4 rounded-xl bg-zinc-50 hover:bg-zinc-100/80 border border-zinc-200/50 cursor-pointer transition-colors"
-                        >
-                          <span className="font-semibold text-zinc-700 text-sm leading-relaxed whitespace-pre-wrap">{bio}</span>
-                          <IconEdit className="w-4 h-4 text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2 mt-0.5" />
-                        </div>
-                      )}
-                    </div>
+                  <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-sm font-black uppercase tracking-wider text-zinc-400">프로필 설정</h2>
+                    {!isEditingProfile && (
+                      <Button
+                        onClick={() => {
+                          setEditForm({
+                            username: profile.username,
+                            name: profile.name,
+                            bio: profile.bio,
+                          });
+                          setIsEditingProfile(true);
+                        }}
+                        variant="outline"
+                        size="sm"
+                        className="h-8 rounded-lg font-bold text-xs gap-1 cursor-pointer"
+                      >
+                        <IconEdit className="w-3.5 h-3.5" />
+                        수정
+                      </Button>
+                    )}
                   </div>
+                  
+                  {isEditingProfile ? (
+                    <form onSubmit={handleProfileSave} className="flex flex-col gap-5">
+                      {/* Username */}
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="username" className="text-xs font-bold text-zinc-500">
+                          Username (고유 URL 슬러그)
+                        </Label>
+                        <div className="relative">
+                          <Input
+                            id="username"
+                            value={editForm.username}
+                            onChange={(e) => setEditForm(prev => ({ ...prev, username: e.target.value }))}
+                            placeholder="username"
+                            className={`h-11 rounded-xl bg-zinc-50 border-zinc-200 font-bold focus-visible:ring-zinc-900 ${
+                              usernameError ? "border-red-500 focus-visible:ring-red-500" : isUsernameAvailable ? "border-emerald-500 focus-visible:ring-emerald-500" : ""
+                            }`}
+                          />
+                          {isCheckingUsername && (
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                              <IconLoader2 className="w-4 h-4 animate-spin text-zinc-400" />
+                            </div>
+                          )}
+                        </div>
+                        {usernameError && (
+                          <p className="text-xs font-semibold text-red-500 ml-1">{usernameError}</p>
+                        )}
+                        {isUsernameAvailable && !usernameError && (
+                          <p className="text-xs font-semibold text-emerald-600 ml-1">사용 가능한 Username입니다.</p>
+                        )}
+                      </div>
+
+                      {/* Name */}
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="name" className="text-xs font-bold text-zinc-500">
+                          이름
+                        </Label>
+                        <Input
+                          id="name"
+                          value={editForm.name}
+                          onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                          placeholder="이름을 입력해주세요"
+                          className="h-11 rounded-xl bg-zinc-50 border-zinc-200 font-bold focus-visible:ring-zinc-900"
+                          required
+                        />
+                      </div>
+
+                      {/* Bio */}
+                      <div className="flex flex-col gap-2">
+                        <div className="flex justify-between items-center">
+                          <Label htmlFor="bio" className="text-xs font-bold text-zinc-500">
+                            소개글
+                          </Label>
+                          <span className="text-[10px] font-bold text-zinc-400">
+                            {editForm.bio.length}/80자
+                          </span>
+                        </div>
+                        <textarea
+                          id="bio"
+                          value={editForm.bio}
+                          onChange={(e) => {
+                            if (e.target.value.length <= 80) {
+                              setEditForm(prev => ({ ...prev, bio: e.target.value }));
+                            }
+                          }}
+                          placeholder="소개글을 입력해주세요 (최대 80자)"
+                          className="flex min-h-[80px] w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm font-semibold text-zinc-700 placeholder:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+                        />
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex justify-end gap-2 mt-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => {
+                            setIsEditingProfile(false);
+                            setUsernameError("");
+                            setIsUsernameAvailable(null);
+                          }}
+                          className="h-10 px-4 text-zinc-500 font-bold rounded-lg hover:bg-zinc-100 cursor-pointer"
+                        >
+                          취소
+                        </Button>
+                        <Button
+                          type="submit"
+                          disabled={
+                            isCheckingUsername ||
+                            isUsernameAvailable === false ||
+                            !editForm.username.trim() ||
+                            !editForm.name.trim()
+                          }
+                          className="h-10 px-5 bg-zinc-900 text-white hover:bg-zinc-800 font-bold rounded-lg cursor-pointer"
+                        >
+                          저장
+                        </Button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="flex flex-col gap-5">
+                      {/* Readonly Username */}
+                      <div className="flex flex-col gap-1.5">
+                        <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Username</span>
+                        <div className="font-bold text-zinc-900 bg-zinc-50 border border-zinc-200/50 rounded-xl px-4 py-2.5">
+                          @{profile.username || "설정되지 않음"}
+                        </div>
+                      </div>
+
+                      {/* Readonly Name */}
+                      <div className="flex flex-col gap-1.5">
+                        <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">이름</span>
+                        <div className="font-bold text-zinc-900 bg-zinc-50 border border-zinc-200/50 rounded-xl px-4 py-2.5">
+                          {profile.name || "설정되지 않음"}
+                        </div>
+                      </div>
+
+                      {/* Readonly Bio */}
+                      <div className="flex flex-col gap-1.5">
+                        <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">소개글</span>
+                        <div className="font-semibold text-zinc-700 text-sm leading-relaxed bg-zinc-50 border border-zinc-200/50 rounded-xl px-4 py-3 whitespace-pre-wrap">
+                          {profile.bio || "소개글이 없습니다."}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </Card>
 
                 {/* Links Management Area */}
@@ -609,11 +769,11 @@ export default function MyPage() {
                     <header className="mb-8 w-full flex flex-col items-center text-center mt-4 z-10">
                       <div className="mb-4 inline-flex items-center justify-center rounded-full bg-white px-6 py-2 border border-zinc-200/80 shadow-sm">
                         <h3 className="text-xl font-extrabold tracking-tight text-zinc-900 break-all">
-                          {displayName}
+                          {isEditingProfile ? editForm.name || "이름" : profile.name || "이름"}
                         </h3>
                       </div>
                       <p className="text-xs text-zinc-500 font-semibold leading-relaxed tracking-wide max-w-[220px] break-words">
-                        {bio}
+                        {isEditingProfile ? editForm.bio : profile.bio}
                       </p>
                     </header>
 

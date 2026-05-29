@@ -29,3 +29,17 @@ export const linkSchema = z.object({
 });
 
 export type LinkFormValues = z.infer<typeof linkSchema>;
+
+export const profileSchema = z.object({
+  username: z
+    .string()
+    .trim()
+    .min(2, "Username은 2자 이상 입력해주세요")
+    .max(20, "Username은 20자 이내로 입력해주세요")
+    .regex(/^[a-z0-9_-]+$/, "Username은 영문 소문자, 숫자, 밑줄(_), 하이픈(-)만 사용 가능합니다"),
+  name: z.string().trim().min(1, "이름을 입력해주세요").max(50, "이름은 50자 이내로 입력해주세요"),
+  bio: z.string().trim().max(80, "소개글은 80자 이내로 입력해주세요").optional().or(z.literal("")),
+});
+
+export type ProfileFormValues = z.infer<typeof profileSchema>;
+
